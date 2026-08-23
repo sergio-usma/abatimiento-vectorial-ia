@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚢 Abatimiento Vectorial - Bahía de Cartagena | Prototipo ECDIS</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Consolas', 'Courier New', monospace;
+    background: #0a1929;
+    color: #c8d6e5;
+    overflow: hidden;
+    height: 100vh;
+  }
+  #app {
+    display: grid;
+    grid-template-columns: 320px 1fr 340px;
+    grid-template-rows: 50px 1fr;
+    height: 100vh;
+    gap: 2px;
+    background: #000;
+  }
+  header {
+    grid-column: 1 / 4;
+    background: linear-gradient(90deg, #0d2840, #1a3a5c);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 2px solid #00d4ff;
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+  }
+  header h1 {
+    font-size: 16px;
+    color: #00d4ff;
+    letter-spacing: 2px;
+    text-shadow: 0 0 8px rgba(0, 212, 255, 0.6);
+  }
+  header .status {
+    margin-left: auto;
+    display: flex;
+    gap: 20px;
+    font-size: 11px;
+  }
+  header .status span { color: #4ade80; }
+  header .status .warn { color: #fbbf24; }
+  header .status .danger { color: #ef4444; }
+
+  .panel {
+    background: #0f2438;
+    overflow-y: auto;
+    padding: 12px;
+    border: 1px solid #1e3a5f;
+  }
+  .panel::-webkit-scrollbar { width: 6px; }
+  .panel::-webkit-scrollbar-thumb { background: #00d4ff; }
+
+  .panel h3 {
+    color: #00d4ff;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #1e3a5f;
+  }
+  .panel h3::before { content: "▸ "; color: #4ade80; }
+
+  .field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    font-size: 11px;
+  }
+  .field label { color: #8ba3bd; flex: 1; }
+  .field input, .field select {
+    width: 90px;
+    background: #0a1929;
+    border: 1px solid #1e3a5f;
+    color: #4ade80;
+    padding: 3px 6px;
+    font-family: inherit;
+    font-size: 11px;
+    text-align: right;
+  }
+  .field input:focus, .field select:focus {
+    outline: none;
+    border-color: #00d4ff;
+    box-shadow: 0 0 5px rgba(0, 212, 255, 0.4);
+  }
+
+  .btn {
+    width: 100%;
+    padding: 8px;
+    margin-top: 6px;
+    background: linear-gradient(180deg, #1e3a5f, #0d2840);
+    border: 1px solid #00d4ff;
+    color: #00d4ff;
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: #00d4ff; color: #0a1929; box-shadow: 0 0 10px #00d4ff; }
+  .btn.danger { border-color: #ef4444; color: #ef4444; }
+  .btn.danger:hover { background: #ef4444; color: #fff; }
+  .btn.success { border-color: #4ade80; color: #4ade80; }
+  .btn.success:hover { background: #4ade80; color: #0a1929; }
+
+  #map {
+    width: 100%;
+    height: 100%;
+    background: #0a1929;
+  }
+  .leaflet-container { background: #0a1929 !important; }
+
+  .telemetry {
+    background: #0a1929;
+    border: 1px solid #1e3a5f;
+    padding: 8px;
+    margin-bottom: 10px;
+    font-size: 11px;
+  }
+  .telemetry .row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+  }
+  .telemetry .row span:first-child { color: #8ba3bd; }
+  .telemetry .row span:last-child { color: #4ade80; font-weight: bold; }
+  .telemetry .row.warn span:last-child { color: #fbbf24; }
+  .telemetry .row.danger span:last-child { color: #ef4444; animation: blink 0.5s infinite; }
+
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  .chart-container {
+    background: #0a1929;
+    border: 1px solid #1e3a5f;
+    padding: 8px;
+    margin-bottom: 10px;
+    height: 150px;
+  }
+
+  /* Modal de encallamiento */
+  #crashModal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(239, 68, 68, 0.85);
+    z-index: 10000;
+    justify-content: center;
+    align-items: center;
+    animation: flashRed 0.3s infinite alternate;
+  }
+  @keyframes flashRed {
+    from { background: rgba(239, 68, 68, 0.7); }
+    to { background: rgba(239, 68, 68, 0.95); }
+  }
+  #crashModal .skull {
+    font-size: 120px;
+    text-align: center;
+    animation: shake 0.2s infinite;
+  }
+  @keyframes shake {
+    0%, 100% { transform: translate(0, 0) rotate(0); }
+    25% { transform: translate(-5px, 3px) rotate(-3deg); }
+    75% { transform: translate(5px, -3px) rotate(3deg); }
+  }
+  #crashModal .msg {
+    color: #fff;
+    font-size: 28px;
+    text-align: center;
+    letter-spacing: 4px;
+    text-shadow: 0 0 20px #000;
+    margin-top: 20px;
+  }
+  #crashModal .submsg {
+    color: #fca5a5;
+    font-size: 14px;
+    text-align: center;
+    margin-top: 10px;
+  }
+  #crashModal button {
+    margin-top: 30px;
+    padding: 12px 30px;
+    background: #fff;
+    color: #ef4444;
+    border: none;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    letter-spacing: 2px;
+  }
+
+  /* Alerta de aguas poco profundas */
+  .shallow-warning {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #fbbf24;
+    color: #000;
+    padding: 10px 30px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    z-index: 9999;
+    display: none;
+    animation: blink 0.6s infinite;
+    box-shadow: 0 0 30px #fbbf24;
+  }
+
+  .legend {
+    background: rgba(10, 25, 41, 0.9);
+    padding: 8px;
+    font-size: 10px;
+    line-height: 1.8;
+  }
+  .legend div { display: flex; align-items: center; gap: 6px; }
+  .legend .dot {
+    width: 12px; height: 3px;
+  }
+
+  /* Iconos personalizados */
+  .ship-icon {
+    width: 30px; height: 30px;
+    background: #4ade80;
+    clip-path: polygon(50% 0%, 100% 70%, 80% 100%, 20% 100%, 0% 70%);
+    transform-origin: center;
+    box-shadow: 0 0 15px #4ade80;
+  }
+  .buoy-icon {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    border: 2px solid #fff;
+  }
+  .buoy-red { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+  .buoy-green { background: #4ade80; box-shadow: 0 0 8px #4ade80; }
+  .buoy-yellow { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+
+  .leaflet-popup-content-wrapper {
+    background: #0f2438;
+    color: #c8d6e5;
+    border: 1px solid #00d4ff;
+  }
+  .leaflet-popup-tip { background: #0f2438; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>⚓ ECDIS PROTOTYPE — ABATIMIENTO VECTORIAL BAHÍA DE CARTAGENA</h1>
+    <div class="status">
+      <span id="gpsStatus">● GPS OK</span>
+      <span id="aisStatus">● AIS SYNC</span>
+      <span id="simStatus">● SIM ACTIVE</span>
+    </div>
+  </header>
+
+  <!-- PANEL IZQUIERDO: CONTROLES -->
+  <div class="panel">
+    <h3>Parámetros del Buque</h3>
+    <div class="field"><label>Eslora (m)</label><input type="number" id="eslora" value="180"></div>
+    <div class="field"><label>Manga (m)</label><input type="number" id="manga" value="28"></div>
+    <div class="field"><label>Calado (m)</label><input type="number" id="calado" value="10.5" step="0.1"></div>
+    <div class="field"><label>Puntal (m)</label><input type="number" id="puntal" value="18" step="0.1"></div>
+    <div class="field"><label>Velocidad (kn)</label><input type="number" id="vel" value="8" step="0.1"></div>
+    <div class="field"><label>Rumbo (°)</label><input type="number" id="rumbo" value="270" min="0" max="359"></div>
+    <div class="field">
+      <label>Tipo</label>
+      <select id="tipoBuque">
+        <option value="contenedor">Portacontenedor</option>
+        <option value="tanquero">Tanquero</option>
+        <option value="granel">Granelero</option>
+        <option value="remolcador">Remolcador</option>
+      </select>
+    </div>
+
+    <h3>Condiciones Ambientales</h3>
+    <div class="field"><label>Viento Dir (°)</label><input type="number" id="vDir" value="45" min="0" max="359"></div>
+    <div class="field"><label>Viento (kn)</label><input type="number" id="vFuerza" value="18"></div>
+    <div class="field"><label>Corriente Dir (°)</label><input type="number" id="cDir" value="180" min="0" max="359"></div>
+    <div class="field"><label>Corriente (kn)</label><input type="number" id="cFuerza" value="1.2" step="0.1"></div>
+    <div class="field"><label>Altura Ola (m)</label><input type="number" id="ola" value="1.2" step="0.1"></div>
+    <div class="field">
+      <label>Estado Mar</label>
+      <select id="mar">
+        <option value="1">Mar 1 - Rizada</option>
+        <option value="2">Mar 2 - Marejada</option>
+        <option value="3" selected>Mar 3 - Mar adentro</option>
+        <option value="4">Mar 4 - Fuerte marejada</option>
+        <option value="5">Mar 5 - Mar gruesa</option>
+      </select>
+    </div>
+    <div class="field"><label>Marea (m)</label><input type="number" id="marea" value="0.3" step="0.1"></div>
+
+    <h3>Coordenadas (DDMMSS)</h3>
+    <div class="field"><label>Lat N</label><input type="text" id="latDMS" value="102330N" placeholder="DDMMSSH"></div>
+    <div class="field"><label>Lon W</label><input type="text" id="lonDMS" value="0753100W" placeholder="DDDMMSSH"></div>
+    <button class="btn" onclick="convertirYUbicar()">🎯 CONVERTIR Y UBICAR</button>
+
+    <h3>Derrota (Waypoints)</h3>
+    <button class="btn success" onclick="activarModoWaypoint()">➕ AGREGAR WAYPOINT</button>
+    <button class="btn danger" onclick="limpiarDerrota()">🗑️ LIMPIAR DERROTA</button>
+
+    <h3>Simulación</h3>
+    <button class="btn success" onclick="iniciarSim()">▶ INICIAR</button>
+    <button class="btn" onclick="pausarSim()">⏸ PAUSAR</button>
+    <button class="btn danger" onclick="resetSim()">⏹ RESET</button>
+    <div class="field"><label>Velocidad Sim</label>
+      <select id="simSpeed">
+        <option value="1">1x</option>
+        <option value="5" selected>5x</option>
+        <option value="20">20x</option>
+        <option value="50">50x</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- MAPA CENTRAL -->
+  <div id="map"></div>
+
+  <!-- PANEL DERECHO: TELEMETRÍA Y GRÁFICAS -->
+  <div class="panel">
+    <h3>Telemetría en Tiempo Real</h3>
+    <div class="telemetry">
+      <div class="row"><span>Posición Lat:</span><span id="tLat">10.3917°</span></div>
+      <div class="row"><span>Posición Lon:</span><span id="tLon">-75.5167°</span></div>
+      <div class="row"><span>COG (Rumbo real):</span><span id="tCOG">270°</span></div>
+      <div class="row"><span>SOG (Vel real):</span><span id="tSOG">8.0 kn</span></div>
+      <div class="row"><span>HDG (Proa):</span><span id="tHDG">270°</span></div>
+      <div class="row"><span>Abatimiento (δ):</span><span id="tAbat">0.0°</span></div>
+      <div class="row"><span>Deriva Lat:</span><span id="tDerivaLat">0.0 kn</span></div>
+      <div class="row"><span>Deriva Lon:</span><span id="tDerivaLon">0.0 kn</span></div>
+      <div class="row"><span>Profundidad:</span><span id="tProf">15.0 m</span></div>
+      <div class="row"><span>UKC:</span><span id="tUKC">4.5 m</span></div>
+    </div>
+
+    <h3>Análisis Vectorial</h3>
+    <div class="telemetry">
+      <div class="row"><span>Fuerza Viento:</span><span id="tFViento">0.0 kN</span></div>
+      <div class="row"><span>Fuerza Corriente:</span><span id="tFCorriente">0.0 kN</span></div>
+      <div class="row"><span>Fuerza Olas:</span><span id="tFOlas">0.0 kN</span></div>
+      <div class="row"><span>Resultante:</span><span id="tFRes">0.0 kN</span></div>
+      <div class="row"><span>Factor K (IA):</span><span id="tK">1.00</span></div>
+    </div>
+
+    <h3>Gráfica: Abatimiento vs Tiempo</h3>
+    <div class="chart-container"><canvas id="chartAbat"></canvas></div>
+
+    <h3>Gráfica: Fuerzas sobre el Buque</h3>
+    <div class="chart-container"><canvas id="chartFuerzas"></canvas></div>
+
+    <h3>Perfil Batimétrico de la Ruta</h3>
+    <div class="chart-container"><canvas id="chartBatim"></canvas></div>
+
+    <h3>Leyenda</h3>
+    <div class="legend">
+      <div><span class="dot" style="background:#4ade80"></span> Rumbo (HDG) - Proa</div>
+      <div><span class="dot" style="background:#00d4ff"></span> COG - Trayectoria real</div>
+      <div><span class="dot" style="background:#ef4444"></span> Vector Viento</div>
+      <div><span class="dot" style="background:#a78bfa"></span> Vector Corriente</div>
+      <div><span class="dot" style="background:#fbbf24"></span> Vector Resultante</div>
+      <div><span class="dot" style="background:#f472b6"></span> Derrota planificada</div>
+      <div><span class="dot" style="background:#fff;height:8px;width:8px;border-radius:50%"></span> Boyas IALA-A</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DE ENCALLAMIENTO -->
+<div id="crashModal">
+  <div>
+    <div class="skull">💀</div>
+    <div class="msg">⚠ BUQUE ENCALLADO ⚠</div>
+    <div class="submsg" id="crashInfo">UKC negativo - Contacto con el fondo</div>
+    <button onclick="cerrarCrash()">REINICIAR SIMULACIÓN</button>
+  </div>
+</div>
+
+<!-- ALERTA DE AGUAS POCO PROFUNDAS -->
+<div class="shallow-warning" id="shallowWarn">⚠ SHALLOW WATER WARNING ⚠</div>
+
+<script>
+// ==================== CONFIGURACIÓN INICIAL ====================
+const map = L.map('map', {
+  center: [10.3917, -75.5167], // Bahía de Cartagena
+  zoom: 13,
+  zoomControl: false,
+  attributionControl: false
+});
+
+// Capa base oscura estilo ECDIS
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Base/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 18,
+  opacity: 0.6
+}).addTo(map);
+
+// Capa de referencia náutica
+L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Ocean/World_Ocean_Reference/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 18,
+  opacity: 0.8
+}).addTo(map);
+
+// ==================== BATIMETRÍA SIMULADA DE CARTAGENA ====================
+// Puntos representativos: [lat, lon, profundidad(m)]
+// Zona profunda: canal de acceso. Zona somera: Bocagrande, Manga
+const batimetria = [
+  // Canal de acceso principal (profundo)
+  [10.35, -75.58, 18], [10.36, -75.57, 17], [10.37, -75.56, 16],
+  [10.38, -75.55, 15], [10.39, -75.54, 14], [10.40, -75.53, 13],
+  [10.41, -75.52, 12], [10.42, -75.51, 11], [10.43, -75.50, 10],
+  // Zona Bocagrande (somera)
+  [10.38, -75.56, 4], [10.385, -75.565, 3.5], [10.39, -75.57, 3],
+  [10.395, -75.575, 2.5], [10.40, -75.58, 2], [10.405, -75.585, 1.5],
+  [10.41, -75.59, 1], [10.415, -75.595, 0.8],
+  // Zona Manga / Centro (media)
+  [10.42, -75.52, 8], [10.425, -75.515, 7], [10.43, -75.51, 6],
+  [10.435, -75.505, 5], [10.44, -75.50, 4.5],
+  // Zona puerto (profunda - dársena)
+  [10.44, -75.52, 14], [10.445, -75.525, 15], [10.45, -75.53, 16],
+  // Zona outside (mar abierto)
+  [10.30, -75.60, 25], [10.32, -75.62, 30], [10.34, -75.64, 35],
+  [10.36, -75.66, 40], [10.38, -75.68, 45]
+];
+
+// Visualizar puntos batimétricos
+batimetria.forEach(p => {
+  const color = p[2] < 3 ? '#ef4444' : p[2] < 6 ? '#fbbf24' : p[2] < 10 ? '#4ade80' : '#00d4ff';
+  L.circleMarker([p[0], p[1]], {
+    radius: 3, color: color, fillColor: color, fillOpacity: 0.5, weight: 1
+  }).addTo(map).bindTooltip(`${p[2].toFixed(1)}m`);
+});
+
+// ==================== BOYAS DEL CANAL (IALA-A) ====================
+const boyas = [
+  {lat: 10.36, lon: -75.57, tipo: 'red', nombre: 'BOYA 2 - Canal Acceso'},
+  {lat: 10.37, lon: -75.56, tipo: 'green', nombre: 'BOYA 3 - Estribor'},
+  {lat: 10.38, lon: -75.55, tipo: 'red', nombre: 'BOYA 4 - Babor'},
+  {lat: 10.39, lon: -75.54, tipo: 'green', nombre: 'BOYA 5 - Estribor'},
+  {lat: 10.40, lon: -75.53, tipo: 'red', nombre: 'BOYA 6 - Babor'},
+  {lat: 10.41, lon: -75.52, tipo: 'green', nombre: 'BOYA 7 - Estribor'},
+  {lat: 10.42, lon: -75.51, tipo: 'yellow', nombre: 'BOYA CARDINAL - Peligro aislado'},
+  {lat: 10.43, lon: -75.50, tipo: 'red', nombre: 'BOYA 8 - Aproximación puerto'}
+];
+
+boyas.forEach(b => {
+  const icon = L.divIcon({
+    className: `buoy-icon buoy-${b.tipo}`,
+    iconSize: [14, 14]
+  });
+  L.marker([b.lat, b.lon], {icon: icon}).addTo(map).bindPopup(`<b>${b.nombre}</b><br>Tipo: ${b.tipo.toUpperCase()}`);
+});
+
+// ==================== ESTADO DE LA SIMULACIÓN ====================
+const estado = {
+  barco: {
+    lat: 10.35, lon: -75.58,
+    rumbo: 270, // grados náuticos
+    vel: 8, // nudos
+    eslora: 180, manga: 28, calado: 10.5, puntal: 18
+  },
+  ambiente: {
+    vDir: 45, vFuerza: 18,
+    cDir: 180, cFuerza: 1.2,
+    ola: 1.2, mar: 3, marea: 0.3
+  },
+  waypoints: [],
+  modoWaypoint: false,
+  simActiva: false,
+  simInterval: null,
+  historial: {
+    tiempo: [],
+    abatimiento: [],
+    fViento: [],
+    fCorriente: [],
+    fOlas: []
+  }
+};
+
+// ==================== ICONO DEL BARCO ====================
+const shipIcon = L.divIcon({
+  className: '',
+  html: '<div class="ship-icon"></div>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15]
+});
+
+const shipMarker = L.marker([estado.barco.lat, estado.barco.lon], {icon: shipIcon}).addTo(map);
+
+// Capas para vectores y trayectoria
+const vectorLayer = L.layerGroup().addTo(map);
+const trackLayer = L.layerGroup().addTo(map);
+const waypointLayer = L.layerGroup().addTo(map);
+
+// ==================== CONVERSIÓN DDMMSS -> DECIMAL ====================
+function dmsToDecimal(dms, isLat) {
+  // Formato: DDMMSSH o DDDMMSSH
+  const str = dms.trim().toUpperCase();
+  const hemisferio = str.slice(-1);
+  const nums = str.slice(0, -1);
+  const dd = isLat ? parseInt(nums.slice(0, 2)) : parseInt(nums.slice(0, 3));
+  const mm = isLat ? parseInt(nums.slice(2, 4)) : parseInt(nums.slice(3, 5));
+  const ss = isLat ? parseInt(nums.slice(4, 6) || 0) : parseInt(nums.slice(5, 7) || 0);
+  let dec = dd + mm/60 + ss/3600;
+  if (hemisferio === 'S' || hemisferio === 'W') dec = -dec;
+  return dec;
+}
+
+function convertirYUbicar() {
+  try {
+    const lat = dmsToDecimal(document.getElementById('latDMS').value, true);
+    const lon = dmsToDecimal(document.getElementById('lonDMS').value, false);
+    estado.barco.lat = lat;
+    estado.barco.lon = lon;
+    shipMarker.setLatLng([lat, lon]);
+    map.setView([lat, lon], 14);
+    actualizarTelemetria();
+  } catch(e) {
+    alert('Error en formato. Use: DDMMSSH (ej: 102330N)');
+  }
+}
+
+// ==================== CÁLCULO DE PROFUNDIDAD (INTERPOLACIÓN) ====================
+function obtenerProfundidad(lat, lon) {
+  // Interpolación inversa por distancia (IDP simplificado)
+  let suma = 0, peso = 0;
+  batimetria.forEach(p => {
+    const d = Math.sqrt(Math.pow(p[0]-lat, 2) + Math.pow(p[1]-lon, 2));
+    if (d < 0.0001) return p[2];
+    const w = 1 / (d * d);
+    suma += p[2] * w;
+    peso += w;
+  });
+  return peso > 0 ? suma / peso : 10;
+}
+
+// ==================== FÍSICA VECTORIAL - NÚCLEO ====================
+function degToRad(d) { return d * Math.PI / 180; }
+function radToDeg(r) { return r * 180 / Math.PI; }
+
+// Convierte grados náuticos (0=N, horario) a radianes matemáticos (0=E, antihorario)
+function nautToMathRad(deg) {
+  return degToRad((90 - deg + 360) % 360);
+}
+
+// Calcula la fuerza del viento sobre el buque (simplificación)
+function calcularFuerzaViento() {
+  const areaLateral = estado.barco.eslora * (estado.barco.puntal - estado.barco.calado);
+  const areaFrontal = estado.barco.manga * (estado.barco.puntal - estado.barco.calado);
+  const rhoAire = 1.225; // kg/m³
+  const vVientoMs = estado.ambiente.vFuerza * 0.5144; // nudos a m/s
+  const Cd = 1.2; // coeficiente aerodinámico
+  
+  // Ángulo relativo del viento respecto a la proa
+  const angRel = ((estado.ambiente.vDir - estado.barco.rumbo + 360) % 360);
+  const angRelRad = degToRad(angRel);
+  
+  // Componentes de fuerza
+  const fLong = 0.5 * rhoAire * vVientoMs * vVientoMs * areaFrontal * Cd * Math.cos(angRelRad);
+  const fTrans = 0.5 * rhoAire * vVientoMs * vVientoMs * areaLateral * Cd * Math.sin(angRelRad);
+  
+  return { fLong, fTrans, magnitud: Math.sqrt(fLong*fLong + fTrans*fTrans), angulo: angRel };
+}
+
+// Calcula la fuerza de la corriente
+function calcularFuerzaCorriente() {
+  const areaSumergida = estado.barco.eslora * estado.barco.calado;
+  const rhoAgua = 1025; // kg/m³ agua de mar
+  const vCorMs = estado.ambiente.cFuerza * 0.5144;
+  const Cd = 0.8;
+  
+  const angRel = ((estado.ambiente.cDir - estado.barco.rumbo + 360) % 360);
+  const angRelRad = degToRad(angRel);
+  
+  const fLong = 0.5 * rhoAgua * vCorMs * vCorMs * areaSumergida * Cd * Math.cos(angRelRad);
+  const fTrans = 0.5 * rhoAgua * vCorMs * vCorMs * areaSumergida * Cd * Math.sin(angRelRad);
+  
+  return { fLong, fTrans, magnitud: Math.sqrt(fLong*fLong + fTrans*fTrans), angulo: angRel };
+}
+
+// Calcula la fuerza de las olas
+function calcularFuerzaOlas() {
+  const rhoAgua = 1025;
+  const g = 9.81;
+  const H = estado.ambiente.ola;
+  const area = estado.barco.eslora * estado.barco.manga;
+  // Simplificación: fuerza proporcional a altura de ola
+  const magnitud = 0.3 * rhoAgua * g * H * area * 0.001;
+  const angulo = estado.ambiente.vDir; // dirección aproximada
+  
+  const fLong = magnitud * Math.cos(degToRad((angulo - estado.barco.rumbo + 360) % 360));
+  const fTrans = magnitud * Math.sin(degToRad((angulo - estado.barco.rumbo + 360) % 360));
+  
+  return { fLong, fTrans, magnitud, angulo };
+}
+
+// MODELO IA SIMULADO: Factor de corrección K dinámico
+// En un caso real, esto sería un modelo ML entrenado. Aquí usamos heurísticas físicas.
+function calcularFactorK() {
+  const areaVelica = estado.barco.eslora * (estado.barco.puntal - estado.barco.calado);
+  const areaSumergida = estado.barco.eslora * estado.barco.calado;
+  const ratio = areaVelica / Math.max(areaSumergida, 1);
+  
+  // Buques con mucho puntal/calado relativo sufren más abatimiento
+  let K = 1.0;
+  K += (ratio - 1.0) * 0.3; // efecto del ratio área
+  K += estado.ambiente.vFuerza * 0.01; // efecto de la fuerza del viento
+  K += estado.ambiente.ola * 0.1; // efecto de las olas
+  K += (estado.ambiente.mar - 3) * 0.05; // efecto del estado del mar
+  
+  // Ajuste por tipo de buque
+  const tipo = document.getElementById('tipoBuque').value;
+  if (tipo === 'contenedor') K *= 1.3;
+  else if (tipo === 'tanquero') K *= 0.9;
+  else if (tipo === 'remolcador') K *= 0.6;
+  
+  return Math.max(0.5, Math.min(K, 3.0));
+}
+
+// Calcula el abatimiento (ángulo delta)
+function calcularAbatimiento() {
+  const K = calcularFactorK();
+  const vViento = estado.ambiente.vFuerza;
+  const vBuque = estado.barco.vel;
+  
+  // Fórmula clásica modificada con K dinámico
+  const angVientoRel = ((estado.ambiente.vDir - estado.barco.rumbo + 360) % 360);
+  const seno = Math.sin(degToRad(angVientoRel));
+  
+  // Abatimiento en grados
+  let delta = K * (vViento / Math.max(vBuque, 0.1)) * seno * 3;
+  
+  // Limitar a valores razonables (-25° a +25°)
+  delta = Math.max(-25, Math.min(25, delta));
+  return delta;
+}
+
+// Calcula la deriva por corriente
+function calcularDeriva() {
+  const angCorrienteRel = ((estado.ambiente.cDir - estado.barco.rumbo + 360) % 360);
+  const derivaLong = estado.ambiente.cFuerza * Math.cos(degToRad(angCorrienteRel));
+  const derivaTrans = estado.ambiente.cFuerza * Math.sin(degToRad(angCorrienteRel));
+  return { derivaLong, derivaTrans, magnitud: estado.ambiente.cFuerza };
+}
+
+// ==================== ACTUALIZACIÓN DEL PASO DE SIMULACIÓN ====================
+function pasoSimulacion() {
+  // Leer inputs
+  estado.barco.rumbo = parseFloat(document.getElementById('rumbo').value) || 0;
+  estado.barco.vel = parseFloat(document.getElementById('vel').value) || 0;
+  estado.barco.eslora = parseFloat(document.getElementById('eslora').value) || 180;
+  estado.barco.manga = parseFloat(document.getElementById('manga').value) || 28;
+  estado.barco.calado = parseFloat(document.getElementById('calado').value) || 10;
+  estado.barco.puntal = parseFloat(document.getElementById('puntal').value) || 18;
+  
+  estado.ambiente.vDir = parseFloat(document.getElementById('vDir').value) || 0;
+  estado.ambiente.vFuerza = parseFloat(document.getElementById('vFuerza').value) || 0;
+  estado.ambiente.cDir = parseFloat(document.getElementById('cDir').value) || 0;
+  estado.ambiente.cFuerza = parseFloat(document.getElementById('cFuerza').value) || 0;
+  estado.ambiente.ola = parseFloat(document.getElementById('ola').value) || 0;
+  estado.ambiente.mar = parseInt(document.getElementById('mar').value) || 3;
+  estado.ambiente.marea = parseFloat(document.getElementById('marea').value) || 0;
+  
+  // Cálculos físicos
+  const abatimiento = calcularAbatimiento();
+  const deriva = calcularDeriva();
+  const fViento = calcularFuerzaViento();
+  const fCorriente = calcularFuerzaCorriente();
+  const fOlas = calcularFuerzaOlas();
+  
+  // Rumbo real (COG) = HDG + abatimiento
+  const COG = (estado.barco.rumbo + abatimiento + 360) % 360;
+  
+  // Velocidad real sobre el fondo (SOG)
+  const SOG = estado.barco.vel + deriva.derivaLong;
+  
+  // Desplazamiento (escala: 1 nudo = 1 minuto de lat por hora, simplificado)
+  const simSpeed = parseFloat(document.getElementById('simSpeed').value) || 5;
+  const dt = 0.001 * simSpeed; // factor de escala temporal
+  
+  // Movimiento en coordenadas
+  const rumboRad = nautToMathRad(COG);
+  const dLat = (SOG * dt / 60) * Math.cos(degToRad(COG));
+  const dLon = (SOG * dt / 60) * Math.sin(degToRad(COG)) / Math.cos(degToRad(estado.barco.lat));
+  
+  estado.barco.lat += dLat;
+  estado.barco.lon += dLon;
+  
+  // Profundidad y UKC
+  const prof = obtenerProfundidad(estado.barco.lat, estado.barco.lon);
+  const UKC = prof + estado.ambiente.marea - estado.barco.calado;
+  
+  // Actualizar historial
+  estado.historial.tiempo.push(estado.historial.tiempo.length);
+  estado.historial.abatimiento.push(abatimiento);
+  estado.historial.fViento.push(fViento.magnitud / 1000);
+  estado.historial.fCorriente.push(fCorriente.magnitud / 1000);
+  estado.historial.fOlas.push(fOlas.magnitud / 1000);
+  
+  // Limitar historial
+  if (estado.historial.tiempo.length > 60) {
+    Object.keys(estado.historial).forEach(k => estado.historial[k].shift());
+  }
+  
+  // Actualizar UI
+  actualizarMarcador();
+  actualizarVectores(COG, abatimiento);
+  actualizarTelemetriaExtra(COG, SOG, abatimiento, deriva, fViento, fCorriente, fOlas, prof, UKC);
+  actualizarGraficas();
+  
+  // Verificar encallamiento
+  verificarEncallamiento(UKC, prof);
+}
+
+function actualizarMarcador() {
+  shipMarker.setLatLng([estado.barco.lat, estado.barco.lon]);
+  const shipEl = shipMarker.getElement();
+  if (shipEl) {
+    const icon = shipEl.querySelector('.ship-icon');
+    if (icon) icon.style.transform = `rotate(${estado.barco.rumbo}deg)`;
+  }
+  // Trail
+  L.circleMarker([estado.barco.lat, estado.barco.lon], {
+    radius: 1.5, color: '#00d4ff', fillColor: '#00d4ff', fillOpacity: 0.5, weight: 0
+  }).addTo(trackLayer);
+}
+
+function actualizarVectores(COG, abat) {
+  vectorLayer.clearLayers();
+  const lat = estado.barco.lat;
+  const lon = estado.barco.lon;
+  const escala = 0.01; // escala visual
+  
+  // Vector viento (rojo)
+  const vRad = nautToMathRad(estado.ambiente.vDir);
+  const vLen = estado.ambiente.vFuerza * escala * 0.1;
+  L.polyline([
+    [lat, lon],
+    [lat + vLen * Math.cos(vRad), lon + vLen * Math.sin(vRad)]
+  ], {color: '#ef4444', weight: 3, opacity: 0.8}).addTo(vectorLayer);
+  
+  // Vector corriente (púrpura)
+  const cRad = nautToMathRad(estado.ambiente.cDir);
+  const cLen = estado.ambiente.cFuerza * escala * 2;
+  L.polyline([
+    [lat, lon],
+    [lat + cLen * Math.cos(cRad), lon + cLen * Math.sin(cRad)]
+  ], {color: '#a78bfa', weight: 3, opacity: 0.8}).addTo(vectorLayer);
+  
+  // Vector rumbo (verde)
+  const hRad = nautToMathRad(estado.barco.rumbo);
+  L.polyline([
+    [lat, lon],
+    [lat + 0.01 * Math.cos(hRad), lon + 0.01 * Math.sin(hRad)]
+  ], {color: '#4ade80', weight: 2, dashArray: '5,5'}).addTo(vectorLayer);
+  
+  // Vector COG (cyan)
+  const cogRad = nautToMathRad(COG);
+  L.polyline([
+    [lat, lon],
+    [lat + 0.01 * Math.cos(cogRad), lon + 0.01 * Math.sin(cogRad)]
+  ], {color: '#00d4ff', weight: 3}).addTo(vectorLayer);
+}
+
+function actualizarTelemetria() {
+  document.getElementById('tLat').textContent = estado.barco.lat.toFixed(4) + '°';
+  document.getElementById('tLon').textContent = estado.barco.lon.toFixed(4) + '°';
+}
+
+function actualizarTelemetriaExtra(COG, SOG, abat, deriva, fV, fC, fO, prof, UKC) {
+  document.getElementById('tLat').textContent = estado.barco.lat.toFixed(4) + '°';
+  document.getElementById('tLon').textContent = estado.barco.lon.toFixed(4) + '°';
+  document.getElementById('tCOG').textContent = COG.toFixed(1) + '°';
+  document.getElementById('tSOG').textContent = SOG.toFixed(1) + ' kn';
+  document.getElementById('tHDG').textContent = estado.barco.rumbo.toFixed(0) + '°';
+  document.getElementById('tAbat').textContent = abat.toFixed(2) + '°';
+  document.getElementById('tDerivaLat').textContent = deriva.derivaLong.toFixed(2) + ' kn';
+  document.getElementById('tDerivaLon').textContent = deriva.derivaTrans.toFixed(2) + ' kn';
+  document.getElementById('tProf').textContent = prof.toFixed(1) + ' m';
+  document.getElementById('tUKC').textContent = UKC.toFixed(1) + ' m';
+  
+  // Colorear UKC según riesgo
+  const ukcRow = document.getElementById('tUKC').parentElement;
+  ukcRow.className = 'row';
+  if (UKC < 1) ukcRow.className = 'row danger';
+  else if (UKC < 3) ukcRow.className = 'row warn';
+  
+  document.getElementById('tFViento').textContent = (fV.magnitud/1000).toFixed(1) + ' kN';
+  document.getElementById('tFCorriente').textContent = (fC.magnitud/1000).toFixed(1) + ' kN';
+  document.getElementById('tFOlas').textContent = (fO.magnitud/1000).toFixed(1) + ' kN';
+  document.getElementById('tFRes').textContent = (Math.sqrt(
+    Math.pow(fV.fLong+fC.fLong+fO.fLong, 2) + Math.pow(fV.fTrans+fC.fTrans+fO.fTrans, 2)
+  ) / 1000).toFixed(1) + ' kN';
+  document.getElementById('tK').textContent = calcularFactorK().toFixed(2);
+}
+
+// ==================== GRÁFICAS ====================
+const chartAbat = new Chart(document.getElementById('chartAbat'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [{
+      label: 'Abatimiento (°)',
+      data: [],
+      borderColor: '#00d4ff',
+      backgroundColor: 'rgba(0, 212, 255, 0.1)',
+      tension: 0.3, fill: true
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#c8d6e5', font: {size: 10} } } },
+    scales: {
+      x: { ticks: {color: '#8ba3bd', font: {size: 9}}, grid: {color: '#1e3a5f'} },
+      y: { ticks: {color: '#8ba3bd', font: {size: 9}}, grid: {color: '#1e3a5f'} }
+    }
+  }
+});
+
+const chartFuerzas = new Chart(document.getElementById('chartFuerzas'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Viento (kN)', data: [], borderColor: '#ef4444', tension: 0.3 },
+      { label: 'Corriente (kN)', data: [], borderColor: '#a78bfa', tension: 0.3 },
+      { label: 'Olas (kN)', data: [], borderColor: '#fbbf24', tension: 0.3 }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#c8d6e5', font: {size: 10} } } },
+    scales: {
+      x: { ticks: {color: '#8ba3bd', font: {size: 9}}, grid: {color: '#1e3a5f'} },
+      y: { ticks: {color: '#8ba3bd', font: {size: 9}}, grid: {color: '#1e3a5f'} }
+    }
+  }
+});
+
+const chartBatim = new Chart(document.getElementById('chartBatim'), {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      { label: 'Profundidad (m)', data: [], borderColor: '#00d4ff', tension: 0.3, fill: false },
+      { label: 'Calado (m)', data: [], borderColor: '#ef4444', tension: 0, borderDash: [5,5], fill: false }
+    ]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { labels: { color: '#c8d6e5', font: {size: 10} } } },
+    scales: {
+      x: { ticks: {color: '#8ba3bd', font: {size: 9}}, grid: {color: '#1e3a5f'} },
+      y: { reverse: true, ticks: {color: '#8ba3bd', font: {size: 9}}, grid: {color: '#1e3a5f'} }
+    }
+  }
+});
+
+function actualizarGraficas() {
+  chartAbat.data.labels = estado.historial.tiempo;
+  chartAbat.data.datasets[0].data = estado.historial.abatimiento;
+  chartAbat.update('none');
+  
+  chartFuerzas.data.labels = estado.historial.tiempo;
+  chartFuerzas.data.datasets[0].data = estado.historial.fViento;
+  chartFuerzas.data.datasets[1].data = estado.historial.fCorriente;
+  chartFuerzas.data.datasets[2].data = estado.historial.fOlas;
+  chartFuerzas.update('none');
+  
+  // Batimetría de la ruta (últimos puntos del track)
+  const trackPoints = trackLayer.getLayers().slice(-30);
+  const profs = trackPoints.map(l => obtenerProfundidad(l.getLatLng().lat, l.getLatLng().lng));
+  chartBatim.data.labels = profs.map((_, i) => i);
+  chartBatim.data.datasets[0].data = profs;
+  chartBatim.data.datasets[1].data = profs.map(() => estado.barco.calado);
+  chartBatim.update('none');
+}
+
+// ==================== SISTEMA DE ALERTAS ====================
+function verificarEncallamiento(UKC, prof) {
+  const shallowWarn = document.getElementById('shallowWarn');
+  
+  if (UKC < 1 && UKC >= 0) {
+    shallowWarn.style.display = 'block';
+  } else {
+    shallowWarn.style.display = 'none';
+  }
+  
+  if (UKC < 0) {
+    detenerSim();
+    document.getElementById('crashInfo').innerHTML = 
+      `Profundidad: ${prof.toFixed(1)}m | Calado: ${estado.barco.calado}m<br>
+       UKC: ${UKC.toFixed(2)}m | Posición: ${estado.barco.lat.toFixed(4)}, ${estado.barco.lon.toFixed(4)}`;
+    document.getElementById('crashModal').style.display = 'flex';
+  }
+}
+
+function cerrarCrash() {
+  document.getElementById('crashModal').style.display = 'none';
+  resetSim();
+}
+
+// ==================== CONTROLES DE SIMULACIÓN ====================
+function iniciarSim() {
+  if (estado.simActiva) return;
+  estado.simActiva = true;
+  estado.simInterval = setInterval(pasoSimulacion, 200);
+  document.getElementById('simStatus').textContent = '● SIM ACTIVE';
+  document.getElementById('simStatus').className = '';
+}
+
+function pausarSim() {
+  estado.simActiva = false;
+  clearInterval(estado.simInterval);
+  document.getElementById('simStatus').textContent = '● SIM PAUSED';
+  document.getElementById('simStatus').className = 'warn';
+}
+
+function detenerSim() {
+  estado.simActiva = false;
+  clearInterval(estado.simInterval);
+  document.getElementById('simStatus').textContent = '● SIM STOPPED';
+  document.getElementById('simStatus').className = 'danger';
+}
+
+function resetSim() {
+  detenerSim();
+  estado.barco.lat = 10.35;
+  estado.barco.lon = -75.58;
+  estado.barco.rumbo = 270;
+  shipMarker.setLatLng([estado.barco.lat, estado.barco.lon]);
+  trackLayer.clearLayers();
+  vectorLayer.clearLayers();
+  Object.keys(estado.historial).forEach(k => estado.historial[k] = []);
+  document.getElementById('simStatus').textContent = '● SIM READY';
+  document.getElementById('simStatus').className = '';
+  actualizarTelemetria();
+}
+
+// ==================== WAYPOINTS ====================
+function activarModoWaypoint() {
+  estado.modoWaypoint = !estado.modoWaypoint;
+  alert(estado.modoWaypoint ? 
+    'Modo Waypoint ACTIVADO. Haz clic en el mapa para agregar puntos.' : 
+    'Modo Waypoint desactivado.');
+}
+
+map.on('click', function(e) {
+  if (!estado.modoWaypoint) return;
+  estado.waypoints.push([e.latlng.lat, e.latlng.lng]);
+  L.marker(e.latlng, {
+    icon: L.divIcon({
+      className: '',
+      html: '<div style="background:#f472b6;width:10px;height:10px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 10px #f472b6"></div>',
+      iconSize: [14, 14], iconAnchor: [7, 7]
+    })
+  }).addTo(waypointLayer).bindPopup(`WP ${estado.waypoints.length}<br>${e.latlng.lat.toFixed(4)}, ${e.latlng.lng.toFixed(4)}`);
+  
+  // Redibujar línea de derrota
+  redrawDerrota();
+});
+
+function redrawDerrota() {
+  waypointLayer.eachLayer(l => {
+    if (l instanceof L.Polyline) waypointLayer.removeLayer(l);
+  });
+  if (estado.waypoints.length > 1) {
+    L.polyline(estado.waypoints, {
+      color: '#f472b6', weight: 2, dashArray: '10,5', opacity: 0.8
+    }).addTo(waypointLayer);
+  }
+}
+
+function limpiarDerrota() {
+  estado.waypoints = [];
+  waypointLayer.clearLayers();
+}
+
+// ==================== INICIALIZACIÓN ====================
+actualizarTelemetria();
+pasoSimulacion(); // primera iteración para mostrar vectores
+</script>
+</body>
+</html>
