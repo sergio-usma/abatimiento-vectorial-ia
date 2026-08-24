@@ -107,23 +107,35 @@
   /* ---- HUD tipo brújula de videojuego de mundo abierto ---- */
   #gameCompass{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:650;
     background:rgba(6,16,27,.82);border:1px solid var(--line);border-radius:10px;
-    padding:8px 14px 6px;box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(3px);
-    display:flex;flex-direction:column;align-items:center;min-width:440px;}
-  #compassCanvas{display:block;}
-  .compass-readout{display:flex;gap:14px;font-size:10px;margin-top:2px;letter-spacing:.5px;}
+    padding:6px 10px 5px;box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(3px);
+    display:flex;flex-direction:column;align-items:center;min-width:0;width:290px;}
+  #compassCanvas{display:block;max-width:100%;}
+  .compass-readout{display:flex;gap:9px;font-size:9px;margin-top:2px;letter-spacing:.3px;}
   .compass-readout .hdg{color:var(--green);}
   .compass-readout .cog{color:var(--cyan);}
   .compass-readout .cts{color:var(--violet);}
   .compass-readout b{font-weight:800;}
-  #correctionBanner{margin-top:4px;font-size:12px;font-weight:800;letter-spacing:1px;padding:3px 10px;border-radius:5px;transition:.15s;}
+  #correctionBanner{margin-top:3px;font-size:10.5px;font-weight:800;letter-spacing:.5px;padding:2px 8px;border-radius:5px;transition:.15s;}
   #correctionBanner.ok{color:var(--green);background:rgba(74,222,128,.12);}
   #correctionBanner.mid{color:var(--amber);background:rgba(251,191,36,.12);}
   #correctionBanner.high{color:var(--red);background:rgba(239,68,68,.14);animation:blink .7s infinite;}
   #correctionBanner.idle{color:var(--dim);background:rgba(127,156,179,.1);}
-  #wpBadge{font-size:9.5px;color:var(--amber);margin-top:2px;letter-spacing:.5px;}
-  #xteBarWrap{width:220px;height:6px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;margin-top:5px;position:relative;overflow:hidden;}
+  #wpBadge{font-size:8px;color:var(--amber);margin-top:2px;letter-spacing:.2px;text-align:center;white-space:normal;line-height:1.25;}
+  #xteBarWrap{width:150px;height:5px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;margin-top:4px;position:relative;overflow:hidden;}
   #xteBarFill{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);left:50%;transition:.1s;}
   #xteBarWrap::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line);}
+
+  /* ---- Animación de mar (oleaje) y campo de corriente superficial ---- */
+  #seaWaves{position:absolute;inset:0;pointer-events:none;z-index:340;opacity:.3;
+    background:
+      repeating-linear-gradient(115deg, rgba(255,255,255,.06) 0px, rgba(255,255,255,.06) 2px, transparent 2px, transparent 42px),
+      repeating-linear-gradient(115deg, rgba(0,80,120,.14) 0px, rgba(0,80,120,.14) 3px, transparent 3px, transparent 58px);
+    background-size:250% 250%;
+    animation: seaDrift 7s linear infinite;
+    mix-blend-mode:screen;
+  }
+  @keyframes seaDrift{ from{background-position:0 0, 0 0;} to{background-position:420px 240px, -320px 280px;} }
+  #currentFlowCanvas{position:absolute;inset:0;pointer-events:none;z-index:350;}
 </style>
 </head>
 <body>
@@ -144,20 +156,26 @@
     <div class="field"><label>Manga (m)</label><input type="number" id="manga" value="11"></div>
     <div class="field"><label>Calado (m)</label><input type="number" id="calado" value="4.5" step="0.1"></div>
     <div class="field"><label>Puntal (m)</label><input type="number" id="puntal" value="6.5" step="0.1"></div>
-    <div class="field"><label>Tipo</label><select id="tipoBuque">
+    <div class="field"><label>Tipo</label><select id="tipoBuque" onchange="actualizarPotDefault()">
       <option value="remolcador" selected>Remolcador (ASD, doble azimutal)</option>
       <option value="contenedor">Portacontenedor</option>
       <option value="tanquero">Tanquero</option>
       <option value="granel">Granelero</option>
     </select></div>
 
+    <h3>Motores propulsores</h3>
+    <div class="field"><label>Potencia por motor (kW)</label><input type="number" id="potMotor" value="2670" step="10" min="50"></div>
+    <p class="hint" style="text-align:left;max-width:none;">Default investigado: remolcadores ASD de ~32 m reales usan típicamente 2 motores de 2000–3700 kW (p.ej. 2×2300 HP Cummins QSK60M ≈ 57 t de tiro, o 2×5000 PS ≈ 65 t). Se asume ~70 kW por tonelada de tiro a punto fijo (bolardo), dentro del rango real de 40–115 kW/t. El tiro máximo por propulsor se recalcula automáticamente con este valor.</p>
+
     <h3>Ambiente</h3>
-    <div class="field"><label>Viento: procedencia (°)</label><input type="number" id="vDir" value="45" min="0" max="359"></div>
-    <div class="field"><label>Viento (kn)</label><input type="number" id="vFuerza" value="18"></div>
+    <div class="field"><label>Viento: procedencia (°)</label><input type="number" id="vDir" value="45" min="0" max="359" onchange="actualizarCorrienteAuto()"></div>
+    <div class="field"><label>Viento (kn)</label><input type="number" id="vFuerza" value="18" onchange="actualizarCorrienteAuto()"></div>
+    <div class="field"><label style="display:flex;align-items:center;gap:5px;"><input type="checkbox" id="corrienteAuto" checked onchange="actualizarCorrienteAuto()" style="width:auto;"> Corriente ligada al viento</label></div>
     <div class="field"><label>Corriente: destino (°)</label><input type="number" id="cDir" value="200" min="0" max="359"></div>
     <div class="field"><label>Corriente (kn)</label><input type="number" id="cFuerza" value="1.2" step="0.1"></div>
+    <div class="field"><label>Altura de ola Hs (m)</label><input type="number" id="olaHs" value="0.3" step="0.1" min="0" onchange="dibujarOlas()"></div>
     <div class="field"><label>Marea (m)</label><input type="number" id="marea" value="0.3" step="0.1"></div>
-    <p class="hint" style="text-align:left;max-width:none;">El viento se define por su dirección de procedencia (convención meteorológica); la corriente, por la dirección hacia donde fluye (convención oceanográfica de "set").</p>
+    <p class="hint" style="text-align:left;max-width:none;">El viento se define por su procedencia (convención meteorológica); la corriente, por su destino ("set", convención oceanográfica). Con "corriente ligada al viento" activo, el set/drift se calculan del viento (deriva superficial ≈3% de la velocidad del viento, desviada ~20° a la derecha por efecto Ekman/Coriolis en el hemisferio norte); desactívela para modelar una corriente propia de la zona/temporada (p.ej. marea o Canal del Dique). Default de oleaje (0,2–0,5 m) según registros CIOH en playas de Crespo, Cartagena.</p>
 
     <h3>Posición inicial (DDMMSS)</h3>
     <div class="field"><label>Lat N</label><input type="text" id="latDMS" value="101830N"></div>
@@ -187,8 +205,10 @@
   </div>
 
   <div id="map">
+    <div id="seaWaves"></div>
+    <canvas id="currentFlowCanvas"></canvas>
     <div id="gameCompass">
-      <canvas id="compassCanvas" width="440" height="58"></canvas>
+      <canvas id="compassCanvas" width="290" height="46"></canvas>
       <div class="compass-readout">
         <span class="hdg">HDG <b id="hudHDG">—</b></span>
         <span class="cog">COG <b id="hudCOG">—</b></span>
@@ -257,6 +277,9 @@
       <div class="row"><span>Fuerza del viento:</span><span id="tFViento">—</span></div>
       <div class="row"><span>Velocidad angular (yaw):</span><span id="tYaw">—</span></div>
       <div class="row"><span>Masa / desplazamiento:</span><span id="tMasa">—</span></div>
+      <div class="row info"><span>Masa añadida (viada):</span><span id="tMasaAdic">—</span></div>
+      <div class="row"><span>Potencia instalada:</span><span id="tPotencia">—</span></div>
+      <div class="row"><span>Estado del mar (Hs):</span><span id="tOla">—</span></div>
       <div class="row"><span>Modo de gobierno:</span><span id="tModo">Manual (doble azimutal)</span></div>
     </div>
 
@@ -366,11 +389,26 @@ function haversineNM(lat1,lon1,lat2,lon2){
    ========================================================================= */
 const RHO_W = 1025, RHO_A = 1.225;
 const TIPOS = {
-  remolcador:{Cb:0.55, thrustBase:7.0e5, vDesign:12*0.5144, cdWind:1.3},
-  contenedor:{Cb:0.68, thrustBase:1.6e6, vDesign:22*0.5144, cdWind:1.25},
-  tanquero:{Cb:0.82, thrustBase:1.3e6, vDesign:15*0.5144, cdWind:1.15},
-  granel:{Cb:0.78, thrustBase:1.2e6, vDesign:14*0.5144, cdWind:1.15},
+  // potDefaultKW: potencia por motor (kW) sugerida por defecto para cada
+  // tipo, calibrada para reproducir aprox. el mismo tiro máximo que el
+  // modelo anterior a L=32m, usando la conversión de ~70 kW/t de bolardo
+  // (ver hint en el panel "Motores propulsores"). El usuario puede
+  // cambiar este valor libremente; solo se reescribe al cambiar el tipo.
+  remolcador:{Cb:0.55, vDesign:12*0.5144, cdWind:1.3, potDefaultKW:2670},
+  contenedor:{Cb:0.68, vDesign:22*0.5144, cdWind:1.25, potDefaultKW:1020},
+  tanquero:{Cb:0.82, vDesign:15*0.5144, cdWind:1.15, potDefaultKW:830},
+  granel:{Cb:0.78, vDesign:14*0.5144, cdWind:1.15, potDefaultKW:760},
 };
+// kW de potencia instalada por cada tonelada de tiro a punto fijo
+// (bolardo). Referencias reales de remolcadores ASD ~32 m varían entre
+// ~40 y ~115 kW/t según eficiencia de hélice/tobera; se usa un valor
+// intermedio representativo.
+const KW_POR_TONELADA_BOLARDO = 70;
+
+function actualizarPotDefault(){
+  const tipo = document.getElementById('tipoBuque').value;
+  document.getElementById('potMotor').value = TIPOS[tipo].potDefaultKW;
+}
 
 let shipBody = null;
 let ship = null;
@@ -403,7 +441,11 @@ function construirBuque(){
   const p = TIPOS[tipo];
   const vol = L*B*T*p.Cb;
   const mass = Math.max(vol*RHO_W, 3e4);
-  const thrustMax = p.thrustBase * (tipo==='remolcador'? (L/30) : (L/180));
+  // --- Tiro máximo a partir de la potencia instalada (kW por motor) ---
+  const potMotorKW = Math.max(50, parseFloat(document.getElementById('potMotor').value)||TIPOS[tipo].potDefaultKW);
+  const bolardoTonPorMotor = potMotorKW/KW_POR_TONELADA_BOLARDO;
+  const thrustPerMotor = bolardoTonPorMotor*9800; // 1 tf ≈ 9800 N
+  const thrustMax = thrustPerMotor*2; // total entre los dos propulsores (cada uno usa thrustMax*0.5 en el resto del código)
   const Iyaw = mass*(L*L+B*B)/12;
   const kSurge = thrustMax/(p.vDesign*p.vDesign);
   const kSway = kSurge*13;
@@ -414,10 +456,37 @@ function construirBuque(){
   const kYawQuad = maxTorque/(yawDesign*yawDesign);
   const kYawLin = kYawQuad*yawDesign*0.15;
   const windageArea = L*(D-T)*(tipo==='contenedor'?1.25:1.0);
+  // --- Masa añadida (hidrodinámica) — "viada" ---
+  // Un buque real no acelera ni frena como una masa puntual: el agua
+  // que arrastra consigo (masa añadida) se suma a su inercia (informe,
+  // §8: M = masa rígida + masa añadida). Es fuertemente anisótropa:
+  // pequeña en avance/retroceso (forma afinada), pero muy grande de
+  // través (la sección transversal empuja mucha más agua). Se estima
+  // aquí a partir del coeficiente de bloque Cb, siguiendo el orden de
+  // magnitud típico de la literatura de maniobrabilidad naval (Fossen
+  // y similares): ~5-15% de la masa en avance, ~50-120% de través.
+  const addedMassSurgeCoef = 0.06 + 0.10*p.Cb;   // ≈0.09–0.15
+  const addedMassSwayCoef  = 0.45 + 0.75*p.Cb;   // ≈0.86–1.07
+  const addedYawCoef       = 0.10 + 0.20*p.Cb;   // ≈0.16–0.26
+  const effMassSurge = mass*(1+addedMassSurgeCoef);
+  const effMassSway  = mass*(1+addedMassSwayCoef);
+  const effIyaw      = Iyaw*(1+addedYawCoef);
   // geometria de los dos propulsores azimutales (popa, a cada banda)
-  const longOffset = -0.42*L;   // a popa del centro de masa
-  const latOffset = 0.20*B;     // separacion lateral banda a banda
-  return {L,B,T,D,tipo,mass,thrustMax,Iyaw,kSurge,kSway,linSurge,linSway,kYawQuad,kYawLin,windageArea,cdWind:p.cdWind,longOffset,latOffset,maxTorque,yawDesign};
+  // Calibrado para que, con ángulos de gobierno moderados (hasta ~17°
+  // de abanico respecto a la proa), domine el efecto clásico de empuje
+  // diferencial (más potencia a una banda => cae hacia la banda
+  // contraria), tal como se espera al maniobrar. Con separación
+  // longitudinal/transversal muy dispares (p.ej. 0.42L y 0.20B) ese
+  // cruce de dominancia ocurre ya a ~9°, lo cual es físicamente válido
+  // pero contraintuitivo para maniobras normales; con estos valores
+  // (dentro del rango real de remolcadores ASD de doble azimutal) el
+  // cruce sube a ~17°, y solo aparece con ángulos de abanico grandes,
+  // que es cuando el informe de maniobra (§4-6) advierte que el
+  // momento generado por el ángulo puede superar al del empuje puro.
+  const longOffset = -0.33*L;   // a popa del centro de masa
+  const latOffset = 0.30*B;     // separacion lateral banda a banda
+  return {L,B,T,D,tipo,mass,thrustMax,potMotorKW,Iyaw,kSurge,kSway,linSurge,linSway,kYawQuad,kYawLin,windageArea,cdWind:p.cdWind,longOffset,latOffset,maxTorque,yawDesign,
+    addedMassSurgeCoef,addedMassSwayCoef,addedYawCoef,effMassSurge,effMassSway,effIyaw};
 }
 
 function inicializarFisica(lat, lon){
@@ -438,7 +507,97 @@ function leerAmbiente(){
     cDirTo: parseFloat(document.getElementById('cDir').value)||0,
     cKn: parseFloat(document.getElementById('cFuerza').value)||0,
     marea: parseFloat(document.getElementById('marea').value)||0,
+    olaHs: Math.max(0, parseFloat(document.getElementById('olaHs').value)||0),
   };
+}
+
+// --- Corriente superficial ligada al viento (deriva de Ekman simplificada) ---
+// Regla práctica de oceanografía: la deriva superficial inducida por el
+// viento es del orden de 2-3% de la velocidad del viento, desviada hacia
+// la derecha del viento (hemisferio norte, como Cartagena ~10°N) por el
+// efecto Coriolis/Ekman -típicamente 20-45° en mar abierto, aquí se usa
+// un valor más conservador (~20°) apropiado para una bahía somera donde
+// la fricción de fondo reduce la desviación respecto a mar abierto.
+const FACTOR_DERIVA_VIENTO = 0.03;
+const DESVIACION_EKMAN_DEG = 20;
+function actualizarCorrienteAuto(){
+  const auto = document.getElementById('corrienteAuto').checked;
+  const cDirEl = document.getElementById('cDir'), cFuerzaEl = document.getElementById('cFuerza');
+  cDirEl.disabled = auto; cFuerzaEl.disabled = auto;
+  cDirEl.style.opacity = cFuerzaEl.style.opacity = auto? 0.55 : 1;
+  if(!auto) return;
+  const vDirFrom = parseFloat(document.getElementById('vDir').value)||0;
+  const vKn = parseFloat(document.getElementById('vFuerza').value)||0;
+  const rumboViaje = norm360(vDirFrom+180); // hacia dónde sopla el viento
+  cDirEl.value = Math.round(norm360(rumboViaje + DESVIACION_EKMAN_DEG));
+  cFuerzaEl.value = (vKn*FACTOR_DERIVA_VIENTO).toFixed(2);
+}
+
+/* =========================================================================
+   ANIMACIÓN DEL ESTADO DE MAR: oleaje (CSS) y campo de corriente (canvas)
+   ========================================================================= */
+function dibujarOlas(){
+  const amb = leerAmbiente();
+  const Hs = amb.olaHs;
+  const el = document.getElementById('seaWaves');
+  if(!el) return;
+  // Mar más agitado (Hs mayor) => animación más rápida y más visible.
+  const dur = Math.max(2.2, 8 - Hs*7).toFixed(2);
+  const op = Math.min(0.55, 0.10 + Hs*0.55).toFixed(2);
+  el.style.animationDuration = dur+'s';
+  el.style.opacity = op;
+}
+
+let corrienteParticles = [];
+function initCorrienteCanvas(){
+  const canvas = document.getElementById('currentFlowCanvas');
+  if(!canvas) return;
+  function resize(){
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = Math.max(1,Math.round(rect.width));
+    canvas.height = Math.max(1,Math.round(rect.height));
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  map.on('resize', resize);
+  corrienteParticles = Array.from({length:60}, ()=>({
+    x: Math.random()*canvas.width, y: Math.random()*canvas.height
+  }));
+}
+function dibujarCorrienteAnimada(){
+  const canvas = document.getElementById('currentFlowCanvas');
+  if(!canvas || !canvas.width) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const amb = leerAmbiente();
+  const cKn = amb.cKn;
+  if(cKn<0.02) return; // corriente insignificante: no dibujar nada
+  // El mapa no rota (siempre norte arriba), así que un rumbo compás se
+  // traduce directamente en un ángulo de pantalla fijo, sin importar
+  // el zoom o el paneo: dx=E, dy=-N (pantalla crece hacia abajo).
+  const rad = amb.cDirTo*D2R;
+  const dx = Math.sin(rad), dy = -Math.cos(rad);
+  const speed = Math.min(cKn,6)*0.85 + 0.35;
+  const alpha = Math.min(0.5, 0.14+cKn*0.10);
+  const ang = Math.atan2(dy,dx);
+  ctx.strokeStyle = `rgba(167,139,250,${alpha})`;
+  ctx.fillStyle = `rgba(167,139,250,${alpha})`;
+  ctx.lineWidth = 1.6;
+  corrienteParticles.forEach(p=>{
+    p.x += dx*speed; p.y += dy*speed;
+    if(p.x<-25||p.x>canvas.width+25||p.y<-25||p.y>canvas.height+25){
+      p.x = Math.random()*canvas.width; p.y = Math.random()*canvas.height;
+      // reingresa cerca del borde "de barlovento" para que el flujo cruce toda la pantalla
+      p.x -= dx*canvas.width*0.5; p.y -= dy*canvas.height*0.5;
+    }
+    const tx = p.x - dx*11, ty = p.y - dy*11;
+    ctx.beginPath(); ctx.moveTo(tx,ty); ctx.lineTo(p.x,p.y); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(p.x,p.y);
+    ctx.lineTo(p.x - 5*Math.cos(ang-0.4), p.y - 5*Math.sin(ang-0.4));
+    ctx.lineTo(p.x - 5*Math.cos(ang+0.4), p.y - 5*Math.sin(ang+0.4));
+    ctx.closePath(); ctx.fill();
+  });
 }
 
 /* Integración física propia (Newton F=m·a, Euler semi-implícito, SI).
@@ -450,7 +609,6 @@ function pasoFisico(dt){
   const amb = leerAmbiente();
   const heading = estado.heading;
   const bowE = Math.sin(heading), bowN = Math.cos(heading);
-  const stbE = Math.cos(heading), stbN = -Math.sin(heading); // direccion "a estribor"
 
   const cRad = amb.cDirTo*D2R;
   const curE = amb.cKn*0.5144*Math.sin(cRad), curN = amb.cKn*0.5144*Math.cos(cRad);
@@ -478,33 +636,45 @@ function pasoFisico(dt){
   const xS = ship.longOffset, yS =  ship.latOffset;   // estribor
   const torqueP = xP*FyP - yP*FxP;
   const torqueS = xS*FyS - yS*FxS;
-  // Transformar fuerza local (x=proa,y=estribor) -> mundo (E,N).
-  // stbE=bowN y stbN=-bowE (ejes ortogonales), por eso se reutilizan
-  // bowE/bowN, igual que ya se hace más abajo para el arrastre.
-  function localAWorld(Fx,Fy){ return { E: Fx*bowE + Fy*bowN, N: Fx*bowN - Fy*bowE }; }
-  const fP = localAWorld(FxP,FyP), fS = localAWorld(FxS,FyS);
-  const thrE = fP.E+fS.E, thrN = fP.N+fS.N;
 
   // --- Viento ---
   const vWind = amb.vKn*0.5144;
   const windDirTo = norm360(amb.vDirFrom+180)*D2R;
   const fWindMag = 0.5*RHO_A*ship.cdWind*ship.windageArea*vWind*vWind;
   const windE = fWindMag*Math.sin(windDirTo), windN = fWindMag*Math.cos(windDirTo);
-  // Proyectar el viento (mundo) a ejes propios para calcular su momento
-  // con la misma fórmula N = x·Fy − y·Fx usada arriba.
+  // Proyectar el viento (mundo) a ejes propios para sumarlo con el resto
+  // de fuerzas longitudinales/transversales y para su momento (misma
+  // fórmula N = x·Fy − y·Fx usada arriba).
   const windFx = windE*bowE + windN*bowN, windFy = windE*bowN - windN*bowE;
   const armWindX = -0.15*ship.L; // centro de presión vélica, a popa del CG
   const torqueWind = armWindX*windFy;
 
-  // --- Arrastre hidrodinamico anisotropo ---
-  const Fu = -(ship.linSurge*u + ship.kSurge*u*Math.abs(u));
-  const Fw = -(ship.linSway*w + ship.kSway*w*Math.abs(w));
-  const dragE = Fu*bowE + Fw*bowN;
-  const dragN = Fu*bowN - Fw*bowE;
+  // --- Arrastre hidrodinamico anisotropo, con resistencia añadida por oleaje ---
+  // Aproximación simplificada (no sustituye un cálculo real de
+  // resistencia añadida en olas): se incrementa el coeficiente
+  // cuadrático de arrastre en proporción a Hs², de modo que crece con
+  // el estado de mar pero sigue siendo nula a velocidad cero (sin sesgo
+  // artificial). Se asume que el oleaje viaja con el viento, coherente
+  // con las observaciones CIOH en Bahía de Cartagena (oleaje generado
+  // localmente por los alisios).
+  const Hs = amb.olaHs;
+  const waveFactorSurge = 1 + 0.35*Hs*Hs;
+  const waveFactorSway  = 1 + 0.15*Hs*Hs;
+  const Fu = -(ship.linSurge*u + ship.kSurge*waveFactorSurge*u*Math.abs(u));
+  const Fw = -(ship.linSway*w + ship.kSway*waveFactorSway*w*Math.abs(w));
 
-  const totalE = thrE + windE + dragE;
-  const totalN = thrN + windN + dragN;
-  const aE = totalE/ship.mass, aN = totalN/ship.mass;
+  // --- Suma de fuerzas en ejes propios y masa efectiva anisótropa ---
+  // "Viada": al dividir por (masa rígida + masa añadida) en cada eje por
+  // separado -en vez de una única masa isótropa en ejes del mundo- el
+  // buque conserva mucho más su cantidad de movimiento de través (masa
+  // añadida de través »surge, informe §8), es decir, sigue derivando
+  // tras cortar máquinas de forma mucho más realista.
+  const totalFx = FxP+FxS + windFx + Fu;
+  const totalFy = FyP+FyS + windFy + Fw;
+  const aX = totalFx/ship.effMassSurge;
+  const aY = totalFy/ship.effMassSway;
+  // Volver a ejes mundo (misma sustitución stbE=bowN, stbN=-bowE)
+  const aE = aX*bowE + aY*bowN, aN = aX*bowN - aY*bowE;
   const newVE = vE + aE*dt, newVN = vN + aN*dt;
   Matter.Body.setVelocity(shipBody, {x:newVE, y:newVN});
 
@@ -512,7 +682,8 @@ function pasoFisico(dt){
   // N positivo (ejes propios x=proa,y=estribor) gira la proa hacia
   // estribor, que es exactamente el sentido en que crece el rumbo
   // compás (heading), así que se integra directamente sin signo extra.
-  const yawAccel = (torqueP+torqueS+torqueWind+torqueDamp)/ship.Iyaw;
+  // effIyaw incluye la inercia añadida de guiñada (viada rotacional).
+  const yawAccel = (torqueP+torqueS+torqueWind+torqueDamp)/ship.effIyaw;
   estado.yawRate += yawAccel*dt;
   estado.heading = estado.heading + estado.yawRate*dt;
 
@@ -850,12 +1021,28 @@ function actualizarVectores(lat,lon,hdgDeg,cogDeg){
     L.polyline([[lat,lon],[p2.lat,p2.lon]], {color,weight:3,dashArray:dash,opacity:.92}).addTo(vectorLayer);
     return p2;
   }
+  // Punta de flecha simple (dos trazos cortos en V) en el extremo p2,
+  // orientada según la dirección del vector (deg), para dejar claro
+  // hacia dónde apunta (útil sobre todo en viento/corriente que no
+  // tienen guion largo como HDG/COG).
+  function puntaFlecha(p2, deg, color, sizeDeg){
+    const rad = deg*D2R;
+    const backL = norm360(deg+180-25)*D2R, backR = norm360(deg+180+25)*D2R;
+    const pL = {lat:p2.lat+sizeDeg*Math.cos(backL), lon:p2.lon+sizeDeg*Math.sin(backL)};
+    const pR = {lat:p2.lat+sizeDeg*Math.cos(backR), lon:p2.lon+sizeDeg*Math.sin(backR)};
+    L.polygon([[p2.lat,p2.lon],[pL.lat,pL.lon],[pR.lat,pR.lon]], {color, fillColor:color, fillOpacity:.95, weight:1, opacity:.95}).addTo(vectorLayer);
+  }
   const pHdg = seg(hdgDeg, base*1.4, '#4ade80', '8,8');
   const pCog = seg(cogDeg, base*1.4, '#00d4ff', '8,8');
   L.polyline([[pCog.lat,pCog.lon],[pHdg.lat,pHdg.lon]], {color:'#f97316',weight:4,dashArray:'4,4'}).addTo(vectorLayer);
   const amb = leerAmbiente();
-  seg(norm360(amb.vDirFrom+180), baseAmb*Math.min(amb.vKn,40)/10, '#ef4444', null);
-  seg(amb.cDirTo, baseAmb*Math.min(amb.cKn,10)*3, '#a78bfa', null);
+  const lenViento = baseAmb*Math.min(amb.vKn,40)/10;
+  const lenCorriente = baseAmb*Math.min(amb.cKn,10)*3;
+  const dirViento = norm360(amb.vDirFrom+180); // hacia donde sopla
+  const pViento = seg(dirViento, lenViento, '#ef4444', null);
+  puntaFlecha(pViento, dirViento, '#ef4444', lenViento*0.35);
+  const pCorriente = seg(amb.cDirTo, lenCorriente, '#a78bfa', null);
+  puntaFlecha(pCorriente, amb.cDirTo, '#a78bfa', lenCorriente*0.3);
 }
 
 /* =========================================================================
@@ -866,16 +1053,16 @@ function actualizarVectores(lat,lon,hdgDeg,cogDeg){
    deriva) y viento, más un banner textual con la corrección a aplicar:
    "◀ CORRIGE Nº A BABOR" / "▶ CORRIGE Nº A ESTRIBOR".
    ========================================================================= */
-const FOV = 75; // grados visibles a cada lado del centro de la cinta
+const FOV = 62; // grados visibles a cada lado del centro de la cinta (HUD compacto)
 function actualizarCompassHUD(hdgDeg, cogDeg, amb){
   const cvs = document.getElementById('compassCanvas');
   const ctx = cvs.getContext('2d');
-  const w = cvs.width, h = cvs.height, midY = h*0.56;
+  const w = cvs.width, h = cvs.height, midY = h*0.72;
   ctx.clearRect(0,0,w,h);
 
   // franja de fondo
   ctx.fillStyle = 'rgba(255,255,255,.02)';
-  ctx.fillRect(0,6,w,h-16);
+  ctx.fillRect(0,4,w,h-8);
 
   function xFor(deg){
     let d = angDiff(deg, hdgDeg); // -180..180
@@ -890,31 +1077,23 @@ function actualizarCompassHUD(hdgDeg, cogDeg, amb){
     const x = xFor(d);
     const major = d%30===0;
     ctx.strokeStyle = major ? '#3a6485' : '#1c3a56';
-    ctx.lineWidth = major ? 1.6 : 1;
-    const th = major? 12: 6;
-    ctx.beginPath(); ctx.moveTo(x,10); ctx.lineTo(x,10+th); ctx.stroke();
+    ctx.lineWidth = major ? 1.4 : 1;
+    const th = major? 8: 4;
+    ctx.beginPath(); ctx.moveTo(x,5); ctx.lineTo(x,5+th); ctx.stroke();
     if(major){
       const labels = {0:'N',90:'E',180:'S',270:'O'};
       ctx.fillStyle = labels[d] ? '#4ade80' : '#7f9cb3';
-      ctx.font = labels[d] ? 'bold 12px monospace' : '9px monospace';
-      ctx.fillText(labels[d] || String(d).padStart(3,'0'), x, 30);
+      ctx.font = labels[d] ? 'bold 10px monospace' : '8px monospace';
+      ctx.fillText(labels[d] || String(d).padStart(3,'0'), x, 19);
     }
-  }
-
-  // marcador de viento (procede de)
-  const windTo = amb ? norm360(amb.vDirFrom) : null;
-  if(windTo!==null && inView(windTo)){
-    const x = xFor(windTo);
-    ctx.fillStyle='#ef4444'; ctx.font='11px monospace';
-    ctx.fillText('↓W', x, 42);
   }
 
   // marcador COG (rumbo real sobre el fondo)
   if(inView(cogDeg)){
     const x = xFor(cogDeg);
     ctx.strokeStyle='#00d4ff'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(x,midY-14); ctx.lineTo(x,midY+2); ctx.stroke();
-    ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.moveTo(x,midY+2); ctx.lineTo(x-5,midY+10); ctx.lineTo(x+5,midY+10); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(x,midY-9); ctx.lineTo(x,midY+1); ctx.stroke();
+    ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.moveTo(x,midY+1); ctx.lineTo(x-4,midY+7); ctx.lineTo(x+4,midY+7); ctx.closePath(); ctx.fill();
   }
 
   // marcador CTS y waypoint (si hay guiado activo)
@@ -922,21 +1101,20 @@ function actualizarCompassHUD(hdgDeg, cogDeg, amb){
   if(guia){
     if(inView(guia.CTS)){
       const x = xFor(guia.CTS);
-      ctx.strokeStyle='#b48cf2'; ctx.lineWidth=2.4;
-      ctx.beginPath(); ctx.moveTo(x,midY-16); ctx.lineTo(x,midY+4); ctx.stroke();
-      ctx.fillStyle='#b48cf2'; ctx.font='9px monospace'; ctx.fillText('CTS', x, midY-20);
+      ctx.strokeStyle='#b48cf2'; ctx.lineWidth=2.2;
+      ctx.beginPath(); ctx.moveTo(x,midY-11); ctx.lineTo(x,midY+2); ctx.stroke();
     }
     if(inView(guia.bearingWP)){
       const x = xFor(guia.bearingWP);
-      ctx.fillStyle='#f97316'; ctx.font='10px monospace'; ctx.fillText('◆WP'+guia.wpNum, x, midY+22);
+      ctx.fillStyle='#f97316'; ctx.font='8px monospace'; ctx.fillText('◆'+guia.wpNum, x, midY+9);
     }
   }
 
   // marcador central fijo = proa propia (siempre al centro)
-  ctx.strokeStyle='#4ade80'; ctx.lineWidth=2.4;
-  ctx.beginPath(); ctx.moveTo(w/2,4); ctx.lineTo(w/2,h-4); ctx.stroke();
+  ctx.strokeStyle='#4ade80'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(w/2,3); ctx.lineTo(w/2,h-3); ctx.stroke();
   ctx.fillStyle='#4ade80';
-  ctx.beginPath(); ctx.moveTo(w/2,4); ctx.lineTo(w/2-5,-2+12); ctx.lineTo(w/2+5,-2+12); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(w/2,3); ctx.lineTo(w/2-4,9); ctx.lineTo(w/2+4,9); ctx.closePath(); ctx.fill();
 
   // Lecturas numéricas
   document.getElementById('hudHDG').textContent = String(Math.round(hdgDeg)).padStart(3,'0')+'°';
@@ -954,7 +1132,7 @@ function actualizarCompassHUD(hdgDeg, cogDeg, amb){
     else if(absErr<10){ banner.className='mid'; banner.textContent = `${err<0?'◀':''} CORRIGE ${absErr.toFixed(0)}° A ${lado}${err>0?'':''}`.replace('  ',' '); }
     else { banner.className='high'; banner.textContent = `${err<0?'◀':''} ¡CORRIGE ${absErr.toFixed(0)}° A ${lado}!`; }
     const distNM = (guia.distWP/1852).toFixed(2);
-    wpBadge.textContent = `Rumbo a WP${guia.wpNum}/${guia.totalWp} · ${distNM} NM · demora ${Math.round(guia.bearingWP)}° · deriva a compensar ${angDiff(guia.CTS,guia.bearingWP).toFixed(0)}°`;
+    wpBadge.textContent = `WP${guia.wpNum}/${guia.totalWp} · ${distNM} NM · demora ${Math.round(guia.bearingWP)}° · deriva ${angDiff(guia.CTS,guia.bearingWP).toFixed(0)}°`;
     const xteM = guia.xte;
     const xtePx = Math.max(-108, Math.min(108, xteM*0.6));
     xteFill.style.left = `calc(50% + ${xtePx}px)`;
@@ -1011,6 +1189,7 @@ function frame(ts){
   requestAnimationFrame(frame);
   ctrlP.dibujar(); ctrlS.dibujar();
   actualizarIconoBuque();   // la proa se refleja siempre, incluso con la simulación en pausa
+  dibujarCorrienteAnimada(); // animación de corriente ambiental, incluso en pausa
   if(!estado.simActiva || !shipBody){ lastFrame = ts; return; }
   if(lastFrame===null) lastFrame = ts;
   let dtReal = (ts-lastFrame)/1000; lastFrame = ts;
@@ -1090,7 +1269,10 @@ function actualizarTelemetria(lat,lon,hdg,stw,sog,cog,abat,deriva,prof,ukc){
   document.getElementById('tThrustS').textContent = (estado.thrS*100).toFixed(0)+'% @ '+Math.round(estado.azS)+'°'+(estado.manual?'':' (inactivo)');
   document.getElementById('tYaw').textContent = (estado.yawRate*R2D).toFixed(2)+' °/s';
   document.getElementById('tMasa').textContent = (ship.mass/1000).toFixed(0)+' t';
+  document.getElementById('tMasaAdic').textContent = '+'+(ship.mass*ship.addedMassSwayCoef/1000).toFixed(0)+' t través / +'+(ship.mass*ship.addedMassSurgeCoef/1000).toFixed(0)+' t avante';
+  document.getElementById('tPotencia').textContent = (ship.potMotorKW*2).toFixed(0)+' kW (2×'+ship.potMotorKW.toFixed(0)+') · '+((ship.thrustMax/9800)).toFixed(0)+' t bolardo';
   const amb = leerAmbiente();
+  document.getElementById('tOla').textContent = amb.olaHs.toFixed(1)+' m';
   const fWind = 0.5*RHO_A*ship.cdWind*ship.windageArea*Math.pow(amb.vKn*0.5144,2);
   document.getElementById('tFViento').textContent = (fWind/1000).toFixed(1)+' kN';
 }
@@ -1188,6 +1370,9 @@ function resetSim(){
 ubicarBuque();
 document.getElementById('azReadoutP').textContent = String(Math.round(estado.azP)).padStart(3,'0')+'°';
 document.getElementById('azReadoutS').textContent = String(Math.round(estado.azS)).padStart(3,'0')+'°';
+actualizarCorrienteAuto();
+dibujarOlas();
+initCorrienteCanvas();
 </script>
 </body>
 </html>
