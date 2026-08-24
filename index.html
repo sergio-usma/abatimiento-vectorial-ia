@@ -136,6 +136,19 @@
   }
   @keyframes seaDrift{ from{background-position:0 0, 0 0;} to{background-position:420px 240px, -320px 280px;} }
   #currentFlowCanvas{position:absolute;inset:0;pointer-events:none;z-index:350;}
+
+  /* ---- Diagrama de fuerzas en tiempo real (modelo físico, esquina inf. izq.) ---- */
+  #forceDiagram{position:absolute;left:12px;bottom:12px;background:rgba(9,22,36,.92);border:1px solid var(--line);border-radius:10px;padding:12px 12px 9px;box-shadow:0 4px 22px rgba(0,0,0,.5);backdrop-filter:blur(3px);z-index:600;width:198px;}
+  #forceDiagram .dockLabel{position:absolute;top:-9px;left:14px;background:var(--bg);padding:0 6px;font-size:8.5px;color:var(--cyan);letter-spacing:1px;text-transform:uppercase;white-space:nowrap;}
+  #forceDiagramCanvas{display:block;margin:2px auto 4px;}
+  .fd-legend{display:flex;justify-content:center;gap:8px;font-size:7.5px;color:var(--dim);margin-bottom:5px;flex-wrap:wrap;}
+  .fd-legend span{display:flex;align-items:center;gap:2px;}
+  .fd-legend .sw{width:9px;height:2px;display:inline-block;}
+  .fd-readout{font-size:9px;}
+  .fd-row{display:flex;justify-content:space-between;padding:1.5px 0;border-bottom:1px dotted rgba(255,255,255,.06);gap:6px;}
+  .fd-row span:first-child{color:var(--dim);}
+  .fd-row span:last-child{color:var(--green);font-weight:700;text-align:right;}
+  .fd-row.net span:last-child{color:var(--amber);}
 </style>
 </head>
 <body>
@@ -217,6 +230,23 @@
       <div id="correctionBanner" class="idle">— sin derrota activa —</div>
       <div id="wpBadge">Sin derrota planeada</div>
       <div id="xteBarWrap" title="Desviación lateral respecto a la derrota (babor ◀ / estribor ▶)"><div id="xteBarFill"></div></div>
+    </div>
+    <div id="forceDiagram">
+      <span class="dockLabel">Modelo físico en tiempo real</span>
+      <canvas id="forceDiagramCanvas" width="174" height="150"></canvas>
+      <div class="fd-legend">
+        <span><i class="sw" style="background:#2fd4e8"></i>Babor</span>
+        <span><i class="sw" style="background:#fbbf24"></i>Estribor</span>
+        <span><i class="sw" style="background:#4ade80"></i>Neto propuls.</span>
+        <span><i class="sw" style="background:#ef4444;border-top:2px dashed #ef4444;height:0;"></i>Viento</span>
+      </div>
+      <div class="fd-readout">
+        <div class="fd-row"><span>Momento babor:</span><span id="fdTP">—</span></div>
+        <div class="fd-row"><span>Momento estribor:</span><span id="fdTS">—</span></div>
+        <div class="fd-row"><span>Momento viento:</span><span id="fdTW">—</span></div>
+        <div class="fd-row net"><span>Momento neto:</span><span id="fdTNet">—</span></div>
+        <div class="fd-row"><span>Empuje neto propuls.:</span><span id="fdFNet">—</span></div>
+      </div>
     </div>
     <div id="simDock">
       <span class="dockLabel">Gobierno del buque</span>
@@ -600,12 +630,24 @@ function dibujarCorrienteAnimada(){
   });
 }
 
-/* Integración física propia (Newton F=m·a, Euler semi-implícito, SI).
-   Matter.js se usa como contenedor del cuerpo rígido y utilidades
-   vectoriales, no como integrador de fuerzas (ver informe de avance para
-   la justificación de esta decisión de diseño). */
-function pasoFisico(dt){
-  if(!shipBody) return;
+/* =========================================================================
+   MODELO DE FUERZAS — FUENTE ÚNICA DE VERDAD
+   Esta función calcula TODAS las fuerzas y momentos del instante actual,
+   sin integrar nada. Tanto pasoFisico() (que sí integra y mueve el buque)
+   como el diagrama en tiempo real (dibujarDiagramaFuerzas) leen de aquí,
+   así que lo que se ve en el diagrama es exactamente lo que gobierna la
+   física — no hay dos modelos ni riesgo de que diverjan.
+
+   Punto clave (marco de referencia): la propulsión (FxP,FyP,FxS,FyS,
+   torqueP,torqueS) depende ÚNICAMENTE de los mandos del propulsor
+   (estado.azP/thrP/azS/thrS) — nunca de viento ni corriente. Las
+   condiciones meteomarinas (windFx/windFy/torqueWind, y el arrastre
+   Fu/Fw que ya incorpora la corriente vía la velocidad relativa u,w)
+   son términos aparte que se sencillamente SUMAN al final. Por diseño no
+   pueden "contaminar" la propulsión: son ramas de cálculo independientes
+   hasta la suma total.
+   ========================================================================= */
+function calcularFuerzas(){
   const amb = leerAmbiente();
   const heading = estado.heading;
   const bowE = Math.sin(heading), bowN = Math.cos(heading);
@@ -613,82 +655,179 @@ function pasoFisico(dt){
   const cRad = amb.cDirTo*D2R;
   const curE = amb.cKn*0.5144*Math.sin(cRad), curN = amb.cKn*0.5144*Math.cos(cRad);
 
-  const vE = shipBody.velocity.x, vN = shipBody.velocity.y;
+  const vE = shipBody? shipBody.velocity.x : 0, vN = shipBody? shipBody.velocity.y : 0;
   const relE = vE - curE, relN = vN - curN;
   const u = relE*bowE + relN*bowN;
   const w = relE*bowN - relN*bowE;
 
-  // --- Empuje de los dos propulsores azimutales (marco LOCAL del buque) ---
-  // Convención (igual a la del informe de maniobra, sección 4): δ_i es la
-  // dirección en la que el propulsor EMPUJA al casco en ejes propios
-  // (x_b=proa, y_b=estribor): F_i = T_i·[cos δ_i, sin δ_i]. El momento de
-  // guiñada es N_i = x_i·F_{y,i} − y_i·F_{x,i}, evaluado directamente en
-  // ejes del buque (sin necesidad de rotar al marco mundo para el torque).
+  // --- 1) PROPULSIÓN: puramente mecánico, NO depende del ambiente ---
   const activo = (estado.manual || estado.autopilot) ? 1 : 0;
   const thrPmag = activo*estado.thrP*ship.thrustMax*0.5;
   const thrSmag = activo*estado.thrS*ship.thrustMax*0.5;
   const azPr = estado.azP*D2R, azSr = estado.azS*D2R;
-  // Fuerzas en ejes propios (x=proa, y=estribor)
   const FxP = thrPmag*Math.cos(azPr), FyP = thrPmag*Math.sin(azPr);
   const FxS = thrSmag*Math.cos(azSr), FyS = thrSmag*Math.sin(azSr);
-  // Posiciones de los propulsores en ejes propios (popa, a cada banda)
   const xP = ship.longOffset, yP = -ship.latOffset;   // babor
   const xS = ship.longOffset, yS =  ship.latOffset;   // estribor
   const torqueP = xP*FyP - yP*FxP;
   const torqueS = xS*FyS - yS*FxS;
+  const torqueProp = torqueP + torqueS;
+  const FxProp = FxP+FxS, FyProp = FyP+FyS;
 
-  // --- Viento ---
+  // --- 2) AMBIENTE: viento (fuerza externa) ---
   const vWind = amb.vKn*0.5144;
   const windDirTo = norm360(amb.vDirFrom+180)*D2R;
   const fWindMag = 0.5*RHO_A*ship.cdWind*ship.windageArea*vWind*vWind;
   const windE = fWindMag*Math.sin(windDirTo), windN = fWindMag*Math.cos(windDirTo);
-  // Proyectar el viento (mundo) a ejes propios para sumarlo con el resto
-  // de fuerzas longitudinales/transversales y para su momento (misma
-  // fórmula N = x·Fy − y·Fx usada arriba).
   const windFx = windE*bowE + windN*bowN, windFy = windE*bowN - windN*bowE;
-  const armWindX = -0.15*ship.L; // centro de presión vélica, a popa del CG
+  const armWindX = -0.15*ship.L;
   const torqueWind = armWindX*windFy;
 
-  // --- Arrastre hidrodinamico anisotropo, con resistencia añadida por oleaje ---
-  // Aproximación simplificada (no sustituye un cálculo real de
-  // resistencia añadida en olas): se incrementa el coeficiente
-  // cuadrático de arrastre en proporción a Hs², de modo que crece con
-  // el estado de mar pero sigue siendo nula a velocidad cero (sin sesgo
-  // artificial). Se asume que el oleaje viaja con el viento, coherente
-  // con las observaciones CIOH en Bahía de Cartagena (oleaje generado
-  // localmente por los alisios).
+  // --- 3) AMBIENTE: arrastre hidrodinámico (incorpora la corriente vía
+  //     la velocidad relativa u,w) + resistencia añadida por oleaje ---
   const Hs = amb.olaHs;
   const waveFactorSurge = 1 + 0.35*Hs*Hs;
   const waveFactorSway  = 1 + 0.15*Hs*Hs;
   const Fu = -(ship.linSurge*u + ship.kSurge*waveFactorSurge*u*Math.abs(u));
   const Fw = -(ship.linSway*w + ship.kSway*waveFactorSway*w*Math.abs(w));
 
-  // --- Suma de fuerzas en ejes propios y masa efectiva anisótropa ---
-  // "Viada": al dividir por (masa rígida + masa añadida) en cada eje por
-  // separado -en vez de una única masa isótropa en ejes del mundo- el
-  // buque conserva mucho más su cantidad de movimiento de través (masa
-  // añadida de través »surge, informe §8), es decir, sigue derivando
-  // tras cortar máquinas de forma mucho más realista.
-  const totalFx = FxP+FxS + windFx + Fu;
-  const totalFy = FyP+FyS + windFy + Fw;
-  const aX = totalFx/ship.effMassSurge;
-  const aY = totalFy/ship.effMassSway;
-  // Volver a ejes mundo (misma sustitución stbE=bowN, stbN=-bowE)
+  // --- 4) Amortiguamiento de guiñada (siempre opone al giro, no es "ambiente") ---
+  const torqueDamp = -(ship.kYawLin*estado.yawRate + ship.kYawQuad*estado.yawRate*Math.abs(estado.yawRate));
+
+  // --- Totales ---
+  const totalFx = FxProp + windFx + Fu;
+  const totalFy = FyProp + windFy + Fw;
+  const torqueTotal = torqueProp + torqueWind + torqueDamp;
+
+  return {
+    heading, bowE, bowN, u, w, curE, curN,
+    xP, yP, xS, yS, FxP, FyP, FxS, FyS, torqueP, torqueS, torqueProp, FxProp, FyProp,
+    windFx, windFy, torqueWind, fWindMag,
+    Fu, Fw, torqueDamp,
+    totalFx, totalFy, torqueTotal,
+  };
+}
+
+/* Integración física propia (Newton F=m·a, Euler semi-implícito, SI).
+   Matter.js se usa como contenedor del cuerpo rígido y utilidades
+   vectoriales, no como integrador de fuerzas (ver informe de avance para
+   la justificación de esta decisión de diseño). */
+function pasoFisico(dt){
+  if(!shipBody) return;
+  const F = calcularFuerzas();
+  const bowE = F.bowE, bowN = F.bowN;
+
+  // --- Masa efectiva anisótropa (viada, informe §8) ---
+  const aX = F.totalFx/ship.effMassSurge;
+  const aY = F.totalFy/ship.effMassSway;
   const aE = aX*bowE + aY*bowN, aN = aX*bowN - aY*bowE;
+  const vE = shipBody.velocity.x, vN = shipBody.velocity.y;
   const newVE = vE + aE*dt, newVN = vN + aN*dt;
   Matter.Body.setVelocity(shipBody, {x:newVE, y:newVN});
 
-  const torqueDamp = -(ship.kYawLin*estado.yawRate + ship.kYawQuad*estado.yawRate*Math.abs(estado.yawRate));
   // N positivo (ejes propios x=proa,y=estribor) gira la proa hacia
   // estribor, que es exactamente el sentido en que crece el rumbo
   // compás (heading), así que se integra directamente sin signo extra.
-  // effIyaw incluye la inercia añadida de guiñada (viada rotacional).
-  const yawAccel = (torqueP+torqueS+torqueWind+torqueDamp)/ship.effIyaw;
+  const yawAccel = F.torqueTotal/ship.effIyaw;
   estado.yawRate += yawAccel*dt;
   estado.heading = estado.heading + estado.yawRate*dt;
 
-  Matter.Body.translate(shipBody, {x:(newVE+curE)*dt, y:(newVN+curN)*dt});
+  Matter.Body.translate(shipBody, {x:(newVE+F.curE)*dt, y:(newVN+F.curN)*dt});
   estado.tSim += dt;
+}
+
+/* =========================================================================
+   DIAGRAMA DE FUERZAS EN TIEMPO REAL (esquina inferior izquierda)
+   Dibuja, en el marco LOCAL del buque (proa siempre arriba, igual que los
+   diales azimutales), exactamente lo que calcula calcularFuerzas():
+   - Vectores de empuje de cada propulsor (SOLO dependen del control:
+     ángulo/potencia de mando; nunca de viento/corriente/oleaje).
+   - Vector resultante neto de propulsión y arco de guiñada neta.
+   - Vector de viento en línea punteada (fuerza AMBIENTAL, rama de cálculo
+     totalmente separada, que solo se SUMA al final).
+   La corriente no es una fuerza en sí (ya está incorporada en el arrastre
+   vía la velocidad relativa u,w); su vector se sigue viendo por separado
+   en la carta (ver actualizarVectores).
+   ========================================================================= */
+function dibujarDiagramaFuerzas(){
+  const canvas = document.getElementById('forceDiagramCanvas');
+  if(!canvas || !ship) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  const F = calcularFuerzas();
+
+  const cx = w/2, cy = 66, pxm = 1.55;
+  const scaleF = 34/(ship.thrustMax*0.5 || 1);   // px por N (un solo propulsor)
+  const scaleNet = 40/(ship.thrustMax || 1);     // px por N (resultante, hasta el doble)
+  const scaleWind = 26/Math.max(F.fWindMag,1);
+
+  function localToCanvas(x,y){ return { px: cx + y*pxm, py: cy - x*pxm }; }
+  function arrow(x0,y0,x1,y1,color,width){
+    ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=width;
+    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
+    const ang=Math.atan2(y1-y0,x1-x0);
+    ctx.beginPath();
+    ctx.moveTo(x1,y1);
+    ctx.lineTo(x1-6*Math.cos(ang-0.4), y1-6*Math.sin(ang-0.4));
+    ctx.lineTo(x1-6*Math.cos(ang+0.4), y1-6*Math.sin(ang+0.4));
+    ctx.closePath(); ctx.fill();
+  }
+
+  // Casco simplificado (marco local, proa arriba)
+  const halfLen=(ship.L/2)*pxm, halfBeam=(ship.B/2)*pxm;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy-halfLen);
+  ctx.lineTo(cx+halfBeam*0.9, cy-halfLen*0.32);
+  ctx.lineTo(cx+halfBeam*0.9, cy+halfLen*0.9);
+  ctx.lineTo(cx-halfBeam*0.9, cy+halfLen*0.9);
+  ctx.lineTo(cx-halfBeam*0.9, cy-halfLen*0.32);
+  ctx.closePath();
+  ctx.fillStyle='rgba(74,222,128,.07)'; ctx.fill();
+  ctx.strokeStyle='#2c4d6c'; ctx.lineWidth=1; ctx.stroke();
+  ctx.fillStyle='#4ade80'; ctx.font='bold 7.5px monospace'; ctx.textAlign='center';
+  ctx.fillText('PROA', cx, cy-halfLen-4);
+
+  const pP = localToCanvas(F.xP,F.yP), pS = localToCanvas(F.xS,F.yS);
+  ctx.fillStyle='#7f9cb3';
+  ctx.beginPath(); ctx.arc(pP.px,pP.py,2,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(pS.px,pS.py,2,0,Math.PI*2); ctx.fill();
+
+  // Empuje de cada propulsor: SOLO control, nada de ambiente
+  if(Math.hypot(F.FxP,F.FyP)>1) arrow(pP.px,pP.py, pP.px+F.FyP*scaleF, pP.py-F.FxP*scaleF, '#2fd4e8', 2.2);
+  if(Math.hypot(F.FxS,F.FyS)>1) arrow(pS.px,pS.py, pS.px+F.FyS*scaleF, pS.py-F.FxS*scaleF, '#fbbf24', 2.2);
+
+  const cg = localToCanvas(0,0);
+  if(Math.hypot(F.FxProp,F.FyProp)>1) arrow(cg.px,cg.py, cg.px+F.FyProp*scaleNet, cg.py-F.FxProp*scaleNet, '#4ade80', 3);
+
+  // Viento: rama de cálculo AMBIENTAL, aparte (línea punteada)
+  if(F.fWindMag>50){
+    ctx.save(); ctx.setLineDash([3,3]);
+    arrow(cg.px,cg.py, cg.px+F.windFy*scaleWind, cg.py-F.windFx*scaleWind, '#ef4444', 1.8);
+    ctx.restore();
+  }
+
+  // Arco de guiñada neta total (incluye propulsión+viento+amortiguamiento)
+  const maxT = ship.maxTorque||1;
+  const frac = Math.min(1, Math.abs(F.torqueTotal)/maxT);
+  if(frac>0.015){
+    const r=22, dirRight = F.torqueTotal>0;
+    ctx.strokeStyle = dirRight?'#fbbf24':'#2fd4e8';
+    ctx.lineWidth = 2+frac*2.2;
+    ctx.beginPath();
+    if(dirRight) ctx.arc(cg.px,cg.py,r,-0.35,-0.35+0.25+frac*1.6,false);
+    else ctx.arc(cg.px,cg.py,r,Math.PI+0.35,Math.PI+0.35-0.25-frac*1.6,true);
+    ctx.stroke();
+  }
+
+  function dirLabel(t){ return t>150?'→ ESTRIBOR':t<-150?'← BABOR':'— recto'; }
+  document.getElementById('fdTP').textContent = (F.torqueP/1000).toFixed(0)+' kN·m';
+  document.getElementById('fdTS').textContent = (F.torqueS/1000).toFixed(0)+' kN·m';
+  document.getElementById('fdTW').textContent = (F.torqueWind/1000).toFixed(0)+' kN·m';
+  document.getElementById('fdTNet').textContent = (F.torqueTotal/1000).toFixed(0)+' kN·m '+dirLabel(F.torqueTotal);
+  const fPropMag = Math.hypot(F.FxProp,F.FyProp);
+  const fPropDir = fPropMag>1 ? Math.round(norm360(Math.atan2(F.FyProp,F.FxProp)*R2D)) : 0;
+  document.getElementById('fdFNet').textContent = (fPropMag/1000).toFixed(0)+' kN @ '+String(fPropDir).padStart(3,'0')+'°';
 }
 
 /* =========================================================================
@@ -1190,6 +1329,7 @@ function frame(ts){
   ctrlP.dibujar(); ctrlS.dibujar();
   actualizarIconoBuque();   // la proa se refleja siempre, incluso con la simulación en pausa
   dibujarCorrienteAnimada(); // animación de corriente ambiental, incluso en pausa
+  dibujarDiagramaFuerzas();  // modelo de fuerzas en tiempo real, incluso en pausa
   if(!estado.simActiva || !shipBody){ lastFrame = ts; return; }
   if(lastFrame===null) lastFrame = ts;
   let dtReal = (ts-lastFrame)/1000; lastFrame = ts;
