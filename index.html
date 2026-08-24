@@ -194,9 +194,10 @@
         <button class="btn power off" id="powerBtn" onclick="togglePower()">⏻<br>INICIAR</button>
         <button class="btn manual" id="modeToggle" onclick="toggleManual()">🕹️ MANUAL<br>(control activo)</button>
         <button class="btn danger small" onclick="altoGeneral()">⛔ ALTO GENERAL</button>
-        <button class="btn small" onclick="alinearAmbosAProa()">⇧ ALINEAR A PROA</button>
+        <button class="btn small" onclick="alinearAmbosAProa()">⇧ AMBOS AVANTE (toberas a popa)</button>
         <span class="hint">En automático el remolcador deriva solo por viento/corriente. Active manual para gobernar con ambos propulsores.</span>
-        <span class="hint">Truco: para girar en el sitio ("twisting"), apunte un propulsor hacia la proa y el otro hacia la popa (empuje opuesto), no en sentidos laterales opuestos.</span>
+        <span class="hint">Recuerde: por acción-reacción, la tobera de cada propulsor debe apuntar en sentido OPUESTO al empuje deseado. Para ir avante, ambas toberas apuntan hacia popa.</span>
+        <span class="hint">Truco: para girar en el sitio ("twisting"), apunte una tobera hacia la proa y la otra hacia la popa (empuje resultante opuesto entre bandas).</span>
       </div>
     </div>
   </div>
@@ -341,8 +342,8 @@ let shipBody = null;
 let ship = null;
 const estado = {
   heading: 300*D2R, yawRate: 0,
-  azP:270, thrP:0,      // propulsor de babor: azimut (compass) y empuje 0..1
-  azS:270, thrS:0,      // propulsor de estribor
+  azP:120, thrP:0,      // propulsor de babor: azimut de la tobera (compass) y empuje 0..1
+  azS:120, thrS:0,      // propulsor de estribor (120° = popa respecto a la proa inicial 300°)
   manual:true,
   simActiva:false,
   tSim:0, alertaVoz:false,
@@ -418,12 +419,17 @@ function pasoFisico(dt){
   const w = relE*bowN - relN*bowE;
 
   // --- Empuje de los dos propulsores azimutales (solo si modo manual) ---
+  // Convención real de un propulsor azimutal: el ángulo del dial indica
+  // hacia dónde se orienta la tobera (por dónde "escupe" el chorro de
+  // agua); por acción-reacción, el empuje resultante sobre el casco es
+  // en el sentido OPUESTO a la orientación de la tobera. Por eso, para
+  // avanzar hacia la proa, la tobera debe apuntar hacia popa.
   const activo = estado.manual ? 1 : 0;
   const thrPmag = activo*estado.thrP*ship.thrustMax*0.5;
   const thrSmag = activo*estado.thrS*ship.thrustMax*0.5;
   const azPr = estado.azP*D2R, azSr = estado.azS*D2R;
-  const fPE = thrPmag*Math.sin(azPr), fPN = thrPmag*Math.cos(azPr);
-  const fSE = thrSmag*Math.sin(azSr), fSN = thrSmag*Math.cos(azSr);
+  const fPE = -thrPmag*Math.sin(azPr), fPN = -thrPmag*Math.cos(azPr);
+  const fSE = -thrSmag*Math.sin(azSr), fSN = -thrSmag*Math.cos(azSr);
   const thrE = fPE+fSE, thrN = fPN+fSN;
 
   // brazos (marco del buque -> mundo): popa +/- manga/2 a cada banda
@@ -540,10 +546,12 @@ const ctrlS = crearControlAzimutal('azCanvasS','thrTrackS','thrFillS','thrHandle
   ()=>estado.azS, v=>estado.azS=v, ()=>estado.thrS, v=>estado.thrS=v);
 
 function alinearAmbosAProa(){
-  const hdg = norm360(estado.heading*R2D);
-  estado.azP = hdg; estado.azS = hdg;
-  document.getElementById('azReadoutP').textContent = String(Math.round(hdg)).padStart(3,'0')+'°';
-  document.getElementById('azReadoutS').textContent = String(Math.round(hdg)).padStart(3,'0')+'°';
+  // Para avanzar recto hacia la proa, ambas toberas deben apuntar hacia
+  // popa (180° opuesto a la proa), por acción-reacción del propulsor.
+  const popa = norm360(estado.heading*R2D + 180);
+  estado.azP = popa; estado.azS = popa;
+  document.getElementById('azReadoutP').textContent = String(Math.round(popa)).padStart(3,'0')+'°';
+  document.getElementById('azReadoutS').textContent = String(Math.round(popa)).padStart(3,'0')+'°';
 }
 function altoGeneral(){ ctrlP.setThrottleVal(0); ctrlS.setThrottleVal(0); }
 function toggleManual(){
@@ -849,9 +857,10 @@ function pausarSim(){
 function resetSim(){
   estado.simActiva=false; estado.heading=300*D2R; estado.yawRate=0;
   ctrlP.setThrottleVal(0); ctrlS.setThrottleVal(0);
-  estado.azP=270; estado.azS=270;
-  document.getElementById('azReadoutP').textContent='270°';
-  document.getElementById('azReadoutS').textContent='270°';
+  const popa = norm360(300+180);
+  estado.azP=popa; estado.azS=popa;
+  document.getElementById('azReadoutP').textContent=String(Math.round(popa)).padStart(3,'0')+'°';
+  document.getElementById('azReadoutS').textContent=String(Math.round(popa)).padStart(3,'0')+'°';
   if(!estado.manual) toggleManual();
   borrarRuta();
   ubicarBuque();
@@ -861,6 +870,8 @@ function resetSim(){
 
 // Inicializar vista con el buque ya ubicado (pero simulación en pausa)
 ubicarBuque();
+document.getElementById('azReadoutP').textContent = String(Math.round(estado.azP)).padStart(3,'0')+'°';
+document.getElementById('azReadoutS').textContent = String(Math.round(estado.azS)).padStart(3,'0')+'°';
 </script>
 </body>
 </html>
