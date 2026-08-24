@@ -100,6 +100,30 @@
   .btn.power.off:hover{background:var(--red);color:#fff;box-shadow:0 0 14px var(--red);}
   .btn.power.on{border-color:var(--green);color:#04121d;background:var(--green);box-shadow:0 0 14px var(--green);animation:pulseGreen 1.4s infinite;}
   @keyframes pulseGreen{0%,100%{box-shadow:0 0 10px var(--green);}50%{box-shadow:0 0 20px var(--green);}}
+  #modeToggle.auto2{border-color:var(--violet);color:var(--violet);box-shadow:0 0 10px rgba(180,140,242,.5);}
+  .azimuth-canvas.locked{pointer-events:none;opacity:.55;}
+  .thr-track.locked{pointer-events:none;opacity:.55;}
+
+  /* ---- HUD tipo brújula de videojuego de mundo abierto ---- */
+  #gameCompass{position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:650;
+    background:rgba(6,16,27,.82);border:1px solid var(--line);border-radius:10px;
+    padding:8px 14px 6px;box-shadow:0 4px 20px rgba(0,0,0,.5);backdrop-filter:blur(3px);
+    display:flex;flex-direction:column;align-items:center;min-width:440px;}
+  #compassCanvas{display:block;}
+  .compass-readout{display:flex;gap:14px;font-size:10px;margin-top:2px;letter-spacing:.5px;}
+  .compass-readout .hdg{color:var(--green);}
+  .compass-readout .cog{color:var(--cyan);}
+  .compass-readout .cts{color:var(--violet);}
+  .compass-readout b{font-weight:800;}
+  #correctionBanner{margin-top:4px;font-size:12px;font-weight:800;letter-spacing:1px;padding:3px 10px;border-radius:5px;transition:.15s;}
+  #correctionBanner.ok{color:var(--green);background:rgba(74,222,128,.12);}
+  #correctionBanner.mid{color:var(--amber);background:rgba(251,191,36,.12);}
+  #correctionBanner.high{color:var(--red);background:rgba(239,68,68,.14);animation:blink .7s infinite;}
+  #correctionBanner.idle{color:var(--dim);background:rgba(127,156,179,.1);}
+  #wpBadge{font-size:9.5px;color:var(--amber);margin-top:2px;letter-spacing:.5px;}
+  #xteBarWrap{width:220px;height:6px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;margin-top:5px;position:relative;overflow:hidden;}
+  #xteBarFill{position:absolute;top:0;bottom:0;width:2px;background:var(--cyan);left:50%;transition:.1s;}
+  #xteBarWrap::before{content:'';position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line);}
 </style>
 </head>
 <body>
@@ -163,6 +187,17 @@
   </div>
 
   <div id="map">
+    <div id="gameCompass">
+      <canvas id="compassCanvas" width="440" height="58"></canvas>
+      <div class="compass-readout">
+        <span class="hdg">HDG <b id="hudHDG">—</b></span>
+        <span class="cog">COG <b id="hudCOG">—</b></span>
+        <span class="cts">CTS <b id="hudCTS">—</b></span>
+      </div>
+      <div id="correctionBanner" class="idle">— sin derrota activa —</div>
+      <div id="wpBadge">Sin derrota planeada</div>
+      <div id="xteBarWrap" title="Desviación lateral respecto a la derrota (babor ◀ / estribor ▶)"><div id="xteBarFill"></div></div>
+    </div>
     <div id="simDock">
       <span class="dockLabel">Gobierno del buque</span>
 
@@ -193,8 +228,9 @@
       <div class="mode-actions">
         <button class="btn power off" id="powerBtn" onclick="togglePower()">⏻<br>INICIAR</button>
         <button class="btn manual" id="modeToggle" onclick="toggleManual()">🕹️ MANUAL<br>(control activo)</button>
+        <button class="btn small" id="autoBtn" onclick="toggleAutopilot()">🧭 PILOTO AUTO<br>(seguir derrota)</button>
         <button class="btn danger small" onclick="altoGeneral()">⛔ ALTO GENERAL</button>
-        <button class="btn small" onclick="alinearAmbosAProa()">⇧ AMBOS AVANTE (toberas a popa)</button>
+        <button class="btn small" onclick="alinearAmbosAProa()">⇧ AMBOS AVANTE</button>
       </div>
     </div>
   </div>
@@ -234,6 +270,7 @@
     <div class="legend">
       <div><span class="dot" style="background:#4ade80"></span> Rumbo intencional (HDG, proa)</div>
       <div><span class="dot" style="background:#00d4ff"></span> Rumbo real / COG (sobre el fondo)</div>
+      <div><span class="dot" style="background:#b48cf2"></span> CTS — rumbo a gobernar para llegar al WP contrarrestando deriva</div>
       <div><span class="dot" style="background:#f97316"></span> Vector de corrección (deriva)</div>
       <div><span class="dot" style="background:#ef4444"></span> Vector viento</div>
       <div><span class="dot" style="background:#a78bfa"></span> Vector corriente</div>
@@ -339,14 +376,22 @@ let shipBody = null;
 let ship = null;
 const estado = {
   heading: 300*D2R, yawRate: 0,
-  azP:120, thrP:0,      // propulsor de babor: azimut de la tobera (compass) y empuje 0..1
-  azS:120, thrS:0,      // propulsor de estribor (120° = popa respecto a la proa inicial 300°)
+  // azP/azS: ángulo AZIMUTAL en marco LOCAL del buque (0°=empuje hacia la
+  // proa, 90°=empuje hacia estribor, 180°=empuje hacia popa, 270°=empuje
+  // hacia babor). Es decir, el dial indica directamente hacia dónde se
+  // quiere EMPUJAR el buque (convención de fuerza, no de orientación de
+  // la tobera), tal como F_i = T_i·[cos δ_i, sin δ_i] en ejes propios.
+  azP:0, thrP:0,      // propulsor de babor
+  azS:0, thrS:0,      // propulsor de estribor
   manual:true,
+  autopilot:false,     // piloto automático: sigue la derrota trazada
+  wpIndex:0,
   simActiva:false,
   tSim:0, alertaVoz:false,
   historial:{t:[],abat:[],deriva:[]},
   trackPts:[],
   rutaMode:false, ruta:[],
+  guia:null,           // último resultado de calcularGuiado() (para el HUD)
 };
 
 function construirBuque(){
@@ -372,7 +417,7 @@ function construirBuque(){
   // geometria de los dos propulsores azimutales (popa, a cada banda)
   const longOffset = -0.42*L;   // a popa del centro de masa
   const latOffset = 0.20*B;     // separacion lateral banda a banda
-  return {L,B,T,D,tipo,mass,thrustMax,Iyaw,kSurge,kSway,linSurge,linSway,kYawQuad,kYawLin,windageArea,cdWind:p.cdWind,longOffset,latOffset};
+  return {L,B,T,D,tipo,mass,thrustMax,Iyaw,kSurge,kSway,linSurge,linSway,kYawQuad,kYawLin,windageArea,cdWind:p.cdWind,longOffset,latOffset,maxTorque,yawDesign};
 }
 
 function inicializarFisica(lat, lon){
@@ -415,35 +460,41 @@ function pasoFisico(dt){
   const u = relE*bowE + relN*bowN;
   const w = relE*bowN - relN*bowE;
 
-  // --- Empuje de los dos propulsores azimutales (solo si modo manual) ---
-  // Convención real de un propulsor azimutal: el ángulo del dial indica
-  // hacia dónde se orienta la tobera (por dónde "escupe" el chorro de
-  // agua); por acción-reacción, el empuje resultante sobre el casco es
-  // en el sentido OPUESTO a la orientación de la tobera. Por eso, para
-  // avanzar hacia la proa, la tobera debe apuntar hacia popa.
-  const activo = estado.manual ? 1 : 0;
+  // --- Empuje de los dos propulsores azimutales (marco LOCAL del buque) ---
+  // Convención (igual a la del informe de maniobra, sección 4): δ_i es la
+  // dirección en la que el propulsor EMPUJA al casco en ejes propios
+  // (x_b=proa, y_b=estribor): F_i = T_i·[cos δ_i, sin δ_i]. El momento de
+  // guiñada es N_i = x_i·F_{y,i} − y_i·F_{x,i}, evaluado directamente en
+  // ejes del buque (sin necesidad de rotar al marco mundo para el torque).
+  const activo = (estado.manual || estado.autopilot) ? 1 : 0;
   const thrPmag = activo*estado.thrP*ship.thrustMax*0.5;
   const thrSmag = activo*estado.thrS*ship.thrustMax*0.5;
   const azPr = estado.azP*D2R, azSr = estado.azS*D2R;
-  const fPE = -thrPmag*Math.sin(azPr), fPN = -thrPmag*Math.cos(azPr);
-  const fSE = -thrSmag*Math.sin(azSr), fSN = -thrSmag*Math.cos(azSr);
-  const thrE = fPE+fSE, thrN = fPN+fSN;
-
-  // brazos (marco del buque -> mundo): popa +/- manga/2 a cada banda
-  const armPE = ship.longOffset*bowE + (-ship.latOffset)*stbE;
-  const armPN = ship.longOffset*bowN + (-ship.latOffset)*stbN;
-  const armSE = ship.longOffset*bowE + ( ship.latOffset)*stbE;
-  const armSN = ship.longOffset*bowN + ( ship.latOffset)*stbN;
-  const torqueP = armPE*fPN - armPN*fPE;
-  const torqueS = armSE*fSN - armSN*fSE;
+  // Fuerzas en ejes propios (x=proa, y=estribor)
+  const FxP = thrPmag*Math.cos(azPr), FyP = thrPmag*Math.sin(azPr);
+  const FxS = thrSmag*Math.cos(azSr), FyS = thrSmag*Math.sin(azSr);
+  // Posiciones de los propulsores en ejes propios (popa, a cada banda)
+  const xP = ship.longOffset, yP = -ship.latOffset;   // babor
+  const xS = ship.longOffset, yS =  ship.latOffset;   // estribor
+  const torqueP = xP*FyP - yP*FxP;
+  const torqueS = xS*FyS - yS*FxS;
+  // Transformar fuerza local (x=proa,y=estribor) -> mundo (E,N).
+  // stbE=bowN y stbN=-bowE (ejes ortogonales), por eso se reutilizan
+  // bowE/bowN, igual que ya se hace más abajo para el arrastre.
+  function localAWorld(Fx,Fy){ return { E: Fx*bowE + Fy*bowN, N: Fx*bowN - Fy*bowE }; }
+  const fP = localAWorld(FxP,FyP), fS = localAWorld(FxS,FyS);
+  const thrE = fP.E+fS.E, thrN = fP.N+fS.N;
 
   // --- Viento ---
   const vWind = amb.vKn*0.5144;
   const windDirTo = norm360(amb.vDirFrom+180)*D2R;
   const fWindMag = 0.5*RHO_A*ship.cdWind*ship.windageArea*vWind*vWind;
   const windE = fWindMag*Math.sin(windDirTo), windN = fWindMag*Math.cos(windDirTo);
-  const armWind = -0.15*ship.L;
-  const torqueWind = armWind*bowE*windN - armWind*bowN*windE;
+  // Proyectar el viento (mundo) a ejes propios para calcular su momento
+  // con la misma fórmula N = x·Fy − y·Fx usada arriba.
+  const windFx = windE*bowE + windN*bowN, windFy = windE*bowN - windN*bowE;
+  const armWindX = -0.15*ship.L; // centro de presión vélica, a popa del CG
+  const torqueWind = armWindX*windFy;
 
   // --- Arrastre hidrodinamico anisotropo ---
   const Fu = -(ship.linSurge*u + ship.kSurge*u*Math.abs(u));
@@ -458,7 +509,10 @@ function pasoFisico(dt){
   Matter.Body.setVelocity(shipBody, {x:newVE, y:newVN});
 
   const torqueDamp = -(ship.kYawLin*estado.yawRate + ship.kYawQuad*estado.yawRate*Math.abs(estado.yawRate));
-  const yawAccel = -(torqueP+torqueS+torqueWind)/ship.Iyaw + torqueDamp/ship.Iyaw;
+  // N positivo (ejes propios x=proa,y=estribor) gira la proa hacia
+  // estribor, que es exactamente el sentido en que crece el rumbo
+  // compás (heading), así que se integra directamente sin signo extra.
+  const yawAccel = (torqueP+torqueS+torqueWind+torqueDamp)/ship.Iyaw;
   estado.yawRate += yawAccel*dt;
   estado.heading = estado.heading + estado.yawRate*dt;
 
@@ -477,10 +531,12 @@ function crearControlAzimutal(canvasId, trackId, fillId, handleId, readoutAzId, 
     ctx.clearRect(0,0,w,h);
     ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.fillStyle='#0a1c2e'; ctx.fill();
     ctx.lineWidth=2; ctx.strokeStyle='#1c3a56'; ctx.stroke();
+    // Etiquetas en marco LOCAL del buque (siempre con la proa arriba):
+    // el dial indica hacia dónde EMPUJA el propulsor, no un rumbo compás.
     ctx.font='8px monospace'; ctx.fillStyle='#7f9cb3'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    [[0,'N'],[90,'E'],[180,'S'],[270,'O']].forEach(([deg,lab])=>{
+    [[0,'PROA'],[90,'EST'],[180,'POPA'],[270,'BAB']].forEach(([deg,lab])=>{
       const rad=deg*D2R;
-      const px=cx+Math.sin(rad)*(R-9), py=cy-Math.cos(rad)*(R-9);
+      const px=cx+Math.sin(rad)*(R-10), py=cy-Math.cos(rad)*(R-10);
       ctx.fillText(lab, px, py);
     });
     for(let d=0; d<360; d+=30){
@@ -490,9 +546,10 @@ function crearControlAzimutal(canvasId, trackId, fillId, handleId, readoutAzId, 
       ctx.strokeStyle='#2c4d6c'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
     }
-    const hdgDeg = norm360(estado.heading*R2D);
-    needle(hdgDeg, R*0.5, '#4ade80', 2);
-    needle(getAz(), R*0.8, '#2fd4e8', 3.2);
+    // Silueta fija de la proa (siempre arriba, marco relativo al buque)
+    ctx.fillStyle='#4ade80';
+    ctx.beginPath(); ctx.moveTo(cx,cy-R*0.18); ctx.lineTo(cx-4,cy-R*0.04); ctx.lineTo(cx+4,cy-R*0.04); ctx.closePath(); ctx.fill();
+    needle(getAz(), R*0.82, '#2fd4e8', 3.2);
     ctx.beginPath(); ctx.arc(cx,cy,3.5,0,Math.PI*2); ctx.fillStyle='#e8f4fa'; ctx.fill();
     function needle(deg,len,color,width){
       const rad=deg*D2R;
@@ -543,20 +600,19 @@ const ctrlS = crearControlAzimutal('azCanvasS','thrTrackS','thrFillS','thrHandle
   ()=>estado.azS, v=>estado.azS=v, ()=>estado.thrS, v=>estado.thrS=v);
 
 function alinearAmbosAProa(){
-  // Para avanzar recto hacia la proa, ambas toberas deben apuntar hacia
-  // popa (180° opuesto a la proa), por acción-reacción del propulsor.
-  const popa = norm360(estado.heading*R2D + 180);
-  estado.azP = popa; estado.azS = popa;
-  document.getElementById('azReadoutP').textContent = String(Math.round(popa)).padStart(3,'0')+'°';
-  document.getElementById('azReadoutS').textContent = String(Math.round(popa)).padStart(3,'0')+'°';
+  // Marco local: 0° = empuje hacia la proa (avante recto).
+  estado.azP = 0; estado.azS = 0;
+  document.getElementById('azReadoutP').textContent = '000°';
+  document.getElementById('azReadoutS').textContent = '000°';
 }
 function altoGeneral(){ ctrlP.setThrottleVal(0); ctrlS.setThrottleVal(0); }
 function toggleManual(){
   estado.manual = !estado.manual;
+  if(!estado.manual && estado.autopilot) toggleAutopilot(); // deriva libre desactiva el piloto
   const btn = document.getElementById('modeToggle');
   if(estado.manual){ btn.innerHTML='🕹️ MANUAL<br>(control activo)'; btn.className='btn manual'; }
   else{ btn.innerHTML='🌊 AUTOMÁTICO<br>(deriva libre)'; btn.className='btn auto'; }
-  document.getElementById('tModo').textContent = estado.manual? 'Manual (doble azimutal)':'Automático (deriva libre)';
+  if(!estado.autopilot) document.getElementById('tModo').textContent = estado.manual? 'Manual (doble azimutal)':'Automático (deriva libre)';
 }
 
 window.addEventListener('keydown', e=>{
@@ -577,7 +633,7 @@ map.on('click', function(e){
   estado.ruta.push({lat:e.latlng.lat, lon:e.latlng.lng});
   redibujarRuta();
 });
-function borrarRuta(){ estado.ruta=[]; redibujarRuta(); }
+function borrarRuta(){ estado.ruta=[]; estado.wpIndex=0; estado.guia=null; redibujarRuta(); }
 function redibujarRuta(){
   routeLayer.clearLayers();
   const pts = estado.ruta;
@@ -596,6 +652,156 @@ function redibujarRuta(){
     }
   });
   document.getElementById('routeInfo').innerHTML = `${pts.length} waypoints · Distancia total: <b>${totalNM.toFixed(2)} NM</b><br>${legsHtml}`;
+}
+
+/* =========================================================================
+   5b. GUIADO Y PILOTO AUTOMÁTICO — sigue la derrota trazada
+   Implementa el "triángulo de velocidades" (§3 y §6 del informe): para
+   alcanzar un COG deseado con corriente presente, primero se calcula la
+   velocidad relativa al agua V_W = V_G,deseada − V_C, y el CTS (curso a
+   gobernar) es la dirección de V_W. Luego un controlador de rumbo
+   (§12: N_d = Kψ·eψ − Kr·r) lleva la proa a ese CTS, y la asignación de
+   control (§17, aproximada) reparte fuerza y momento entre los dos
+   azimutales usando una dirección de empuje común más una diferencia de
+   empuje babor/estribor para el momento de guiñada (§4-§6).
+   ========================================================================= */
+const WP_CAPTURE_R = 55; // metros — radio de captura de un waypoint
+
+function calcularGuiado(){
+  const ruta = estado.ruta;
+  if(!ruta || ruta.length===0 || estado.wpIndex>=ruta.length || !shipBody) return null;
+
+  const shipXY = {x:shipBody.position.x, y:shipBody.position.y};
+  const wp = ruta[estado.wpIndex];
+  const wpXY = latlonToXY(wp.lat, wp.lon);
+  const dx = wpXY.x - shipXY.x, dy = wpXY.y - shipXY.y; // (E,N) en metros
+  const distWP = Math.hypot(dx,dy);
+  const bearingWP = norm360(Math.atan2(dx,dy)*R2D); // rumbo verdadero hacia el WP
+
+  // Error de trayectoria (cross-track) respecto al segmento anterior->WP
+  let xte = 0;
+  const prev = estado.wpIndex>0 ? ruta[estado.wpIndex-1] : null;
+  if(prev){
+    const prevXY = latlonToXY(prev.lat, prev.lon);
+    const segE = wpXY.x-prevXY.x, segN = wpXY.y-prevXY.y;
+    const segLen = Math.hypot(segE,segN)||1;
+    const relE = shipXY.x-prevXY.x, relN = shipXY.y-prevXY.y;
+    // componente perpendicular al segmento (positivo = desviado a estribor)
+    xte = (relE*segN - relN*segE)/segLen;
+  }
+
+  // Velocidad deseada sobre el fondo: más lenta cerca del último WP
+  const esUltimo = estado.wpIndex===ruta.length-1;
+  const vDesignKn = 8; // velocidad de maniobra objetivo (nudos SOG)
+  let Vd = Math.min(vDesignKn*0.5144, Math.max(1.5*0.5144, distWP*0.06));
+  if(esUltimo && distWP<250) Vd = Math.max(0.8*0.5144, Vd*(distWP/250));
+
+  // Triángulo de velocidades: V_G deseada = Vd en dirección bearingWP;
+  // V_W deseada = V_G deseada − V_C  =>  CTS = dirección de V_W deseada.
+  const amb = leerAmbiente();
+  const cRad = amb.cDirTo*D2R;
+  const curE = amb.cKn*0.5144*Math.sin(cRad), curN = amb.cKn*0.5144*Math.cos(cRad);
+  const brRad = bearingWP*D2R;
+  const VGdE = Vd*Math.sin(brRad), VGdN = Vd*Math.cos(brRad);
+  const VWdE = VGdE-curE, VWdN = VGdN-curN;
+  const CTS = norm360(Math.atan2(VWdE,VWdN)*R2D);
+  const VWdMag = Math.hypot(VWdE,VWdN);
+
+  return {distWP, bearingWP, xte, Vd, CTS, VWdMag, wpNum:estado.wpIndex+1, totalWp:ruta.length};
+}
+
+function actualizarGuia(){
+  // Calcula la guía hacia el waypoint activo SIEMPRE que haya derrota,
+  // esté o no el piloto automático activado — así el HUD (brújula,
+  // banner de corrección) sirve también como ayuda para el gobierno
+  // manual, no solo para el piloto automático.
+  if(!shipBody || !ship){ estado.guia=null; return; }
+  const guia = calcularGuiado();
+  estado.guia = guia;
+  if(guia && guia.distWP < WP_CAPTURE_R && estado.wpIndex < estado.ruta.length-1){
+    estado.wpIndex++;
+  }
+}
+
+function pilotoAutomatico(){
+  if(!estado.autopilot || !shipBody || !ship) return;
+  const hdgDeg = norm360(estado.heading*R2D);
+  const guia = estado.guia;
+  if(!guia){ estado.thrP=0; estado.thrS=0; return; }
+  if(guia.distWP < WP_CAPTURE_R && estado.wpIndex === estado.ruta.length-1){
+    // última boya alcanzada: mantener posición (parar máquinas)
+    estado.thrP=0; estado.thrS=0;
+    return;
+  }
+
+  // --- Control de rumbo (lleva HDG hacia el CTS calculado, §12) ---
+  // Ganancias referidas al momento y velocidad de giro máximos del buque,
+  // para que el mando sature de forma suave en vez de ser todo-o-nada:
+  // pide ~par máximo a 35° de error y ~par máximo de frenado al alcanzar
+  // la velocidad angular de diseño.
+  const ePsi = angDiff(guia.CTS, hdgDeg)*D2R;
+  const Kpsi = ship.maxTorque/(35*D2R), Kr = ship.maxTorque/ship.yawDesign;
+  let Nd = Kpsi*ePsi - Kr*estado.yawRate;
+  Nd = Math.max(-ship.maxTorque, Math.min(ship.maxTorque, Nd));
+
+  // --- Control de velocidad de avance (surge) ---
+  const heading = estado.heading;
+  const bowE = Math.sin(heading), bowN = Math.cos(heading);
+  const u = shipBody.velocity.x*bowE + shipBody.velocity.y*bowN;
+  const eu = guia.VWdMag - u;
+  const Kx = ship.mass*0.35;
+  let Xd = Kx*eu;
+  const FdMax = ship.thrustMax;
+  Xd = Math.max(-FdMax, Math.min(FdMax, Xd));
+
+  const Yd = 0; // el rumbo ya compensado (CTS) asume la corrección de deriva
+
+  // --- Asignación de control a los dos azimutales (aprox. §17) ---
+  const Fd = Math.hypot(Xd,Yd);
+  const phi = Math.atan2(Yd,Xd); // dirección de empuje común, ejes propios
+  const TmaxEach = ship.thrustMax*0.5;
+  let T0 = Math.min(Fd/2, TmaxEach);
+  // Con dirección de empuje común φ≈0/π (Yd=0), el momento total es
+  // N ≈ latOffset·(T_L−T_R) (ver §4-6 del informe), de ahí este brazo:
+  const B_eff = Math.max(ship.latOffset, 1);
+  const signPhi = Math.cos(phi)>=0 ? 1 : -1; // si se va marcha atrás, el diferencial de empuje gira al revés
+  let dT = Nd/(B_eff*signPhi);
+  dT = Math.max(-2*TmaxEach, Math.min(2*TmaxEach, dT));
+  let TL = Math.max(0, Math.min(TmaxEach, T0 + dT/2));
+  let TS = Math.max(0, Math.min(TmaxEach, T0 - dT/2));
+
+  estado.azP = norm360(phi*R2D);
+  estado.azS = norm360(phi*R2D);
+  estado.thrP = TL/TmaxEach;
+  estado.thrS = TS/TmaxEach;
+  document.getElementById('azReadoutP').textContent = String(Math.round(estado.azP)).padStart(3,'0')+'°';
+  document.getElementById('azReadoutS').textContent = String(Math.round(estado.azS)).padStart(3,'0')+'°';
+  ctrlP.setThrottleVal(estado.thrP); ctrlS.setThrottleVal(estado.thrS);
+}
+
+function toggleAutopilot(){
+  const btn = document.getElementById('autoBtn');
+  if(!estado.autopilot){
+    if(!estado.ruta || estado.ruta.length===0){ alert('Primero trace una derrota con al menos un punto ("TRAZAR DERROTA").'); return; }
+    estado.autopilot = true;
+    estado.manual = true; // los propulsores deben estar activos
+    document.getElementById('modeToggle').innerHTML='🕹️ MANUAL<br>(control activo)';
+    document.getElementById('modeToggle').className='btn manual';
+    document.getElementById('tModo').textContent = 'Piloto automático (sigue derrota)';
+    btn.classList.add('active');
+    document.getElementById('azCanvasP').classList.add('locked');
+    document.getElementById('azCanvasS').classList.add('locked');
+    document.getElementById('thrTrackP').classList.add('locked');
+    document.getElementById('thrTrackS').classList.add('locked');
+  } else {
+    estado.autopilot = false;
+    document.getElementById('tModo').textContent = estado.manual? 'Manual (doble azimutal)':'Automático (deriva libre)';
+    btn.classList.remove('active');
+    document.getElementById('azCanvasP').classList.remove('locked');
+    document.getElementById('azCanvasS').classList.remove('locked');
+    document.getElementById('thrTrackP').classList.remove('locked');
+    document.getElementById('thrTrackS').classList.remove('locked');
+  }
 }
 
 /* =========================================================================
@@ -653,6 +859,116 @@ function actualizarVectores(lat,lon,hdgDeg,cogDeg){
 }
 
 /* =========================================================================
+   6b. HUD DE BRÚJULA ESTILO VIDEOJUEGO DE MUNDO ABIERTO
+   Cinta horizontal centrada siempre en el HDG actual (como el "heading
+   tape" de un simulador de vuelo/videojuego open-world). Sobre ella se
+   proyectan marcadores de COG, CTS (rumbo a gobernar, ya corregido por
+   deriva) y viento, más un banner textual con la corrección a aplicar:
+   "◀ CORRIGE Nº A BABOR" / "▶ CORRIGE Nº A ESTRIBOR".
+   ========================================================================= */
+const FOV = 75; // grados visibles a cada lado del centro de la cinta
+function actualizarCompassHUD(hdgDeg, cogDeg, amb){
+  const cvs = document.getElementById('compassCanvas');
+  const ctx = cvs.getContext('2d');
+  const w = cvs.width, h = cvs.height, midY = h*0.56;
+  ctx.clearRect(0,0,w,h);
+
+  // franja de fondo
+  ctx.fillStyle = 'rgba(255,255,255,.02)';
+  ctx.fillRect(0,6,w,h-16);
+
+  function xFor(deg){
+    let d = angDiff(deg, hdgDeg); // -180..180
+    return w/2 + (d/FOV)*(w/2);
+  }
+  function inView(deg){ return Math.abs(angDiff(deg,hdgDeg)) <= FOV; }
+
+  // ticks y etiquetas cardinales/intercardinales
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  for(let d=0; d<360; d+=10){
+    if(!inView(d)) continue;
+    const x = xFor(d);
+    const major = d%30===0;
+    ctx.strokeStyle = major ? '#3a6485' : '#1c3a56';
+    ctx.lineWidth = major ? 1.6 : 1;
+    const th = major? 12: 6;
+    ctx.beginPath(); ctx.moveTo(x,10); ctx.lineTo(x,10+th); ctx.stroke();
+    if(major){
+      const labels = {0:'N',90:'E',180:'S',270:'O'};
+      ctx.fillStyle = labels[d] ? '#4ade80' : '#7f9cb3';
+      ctx.font = labels[d] ? 'bold 12px monospace' : '9px monospace';
+      ctx.fillText(labels[d] || String(d).padStart(3,'0'), x, 30);
+    }
+  }
+
+  // marcador de viento (procede de)
+  const windTo = amb ? norm360(amb.vDirFrom) : null;
+  if(windTo!==null && inView(windTo)){
+    const x = xFor(windTo);
+    ctx.fillStyle='#ef4444'; ctx.font='11px monospace';
+    ctx.fillText('↓W', x, 42);
+  }
+
+  // marcador COG (rumbo real sobre el fondo)
+  if(inView(cogDeg)){
+    const x = xFor(cogDeg);
+    ctx.strokeStyle='#00d4ff'; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.moveTo(x,midY-14); ctx.lineTo(x,midY+2); ctx.stroke();
+    ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.moveTo(x,midY+2); ctx.lineTo(x-5,midY+10); ctx.lineTo(x+5,midY+10); ctx.closePath(); ctx.fill();
+  }
+
+  // marcador CTS y waypoint (si hay guiado activo)
+  const guia = estado.guia;
+  if(guia){
+    if(inView(guia.CTS)){
+      const x = xFor(guia.CTS);
+      ctx.strokeStyle='#b48cf2'; ctx.lineWidth=2.4;
+      ctx.beginPath(); ctx.moveTo(x,midY-16); ctx.lineTo(x,midY+4); ctx.stroke();
+      ctx.fillStyle='#b48cf2'; ctx.font='9px monospace'; ctx.fillText('CTS', x, midY-20);
+    }
+    if(inView(guia.bearingWP)){
+      const x = xFor(guia.bearingWP);
+      ctx.fillStyle='#f97316'; ctx.font='10px monospace'; ctx.fillText('◆WP'+guia.wpNum, x, midY+22);
+    }
+  }
+
+  // marcador central fijo = proa propia (siempre al centro)
+  ctx.strokeStyle='#4ade80'; ctx.lineWidth=2.4;
+  ctx.beginPath(); ctx.moveTo(w/2,4); ctx.lineTo(w/2,h-4); ctx.stroke();
+  ctx.fillStyle='#4ade80';
+  ctx.beginPath(); ctx.moveTo(w/2,4); ctx.lineTo(w/2-5,-2+12); ctx.lineTo(w/2+5,-2+12); ctx.closePath(); ctx.fill();
+
+  // Lecturas numéricas
+  document.getElementById('hudHDG').textContent = String(Math.round(hdgDeg)).padStart(3,'0')+'°';
+  document.getElementById('hudCOG').textContent = String(Math.round(cogDeg)).padStart(3,'0')+'°';
+
+  const banner = document.getElementById('correctionBanner');
+  const wpBadge = document.getElementById('wpBadge');
+  const xteFill = document.getElementById('xteBarFill');
+  if(guia){
+    document.getElementById('hudCTS').textContent = String(Math.round(guia.CTS)).padStart(3,'0')+'°';
+    const err = angDiff(guia.CTS, hdgDeg); // + => hay que girar a estribor
+    const absErr = Math.abs(err);
+    const lado = err>0 ? 'ESTRIBOR ▶' : (err<0 ? '◀ BABOR' : 'EN RUMBO');
+    if(absErr<2){ banner.className='ok'; banner.textContent = '✓ EN RUMBO — mantener'; }
+    else if(absErr<10){ banner.className='mid'; banner.textContent = `${err<0?'◀':''} CORRIGE ${absErr.toFixed(0)}° A ${lado}${err>0?'':''}`.replace('  ',' '); }
+    else { banner.className='high'; banner.textContent = `${err<0?'◀':''} ¡CORRIGE ${absErr.toFixed(0)}° A ${lado}!`; }
+    const distNM = (guia.distWP/1852).toFixed(2);
+    wpBadge.textContent = `Rumbo a WP${guia.wpNum}/${guia.totalWp} · ${distNM} NM · demora ${Math.round(guia.bearingWP)}° · deriva a compensar ${angDiff(guia.CTS,guia.bearingWP).toFixed(0)}°`;
+    const xteM = guia.xte;
+    const xtePx = Math.max(-108, Math.min(108, xteM*0.6));
+    xteFill.style.left = `calc(50% + ${xtePx}px)`;
+    xteFill.style.background = Math.abs(xteM)<20 ? '#4ade80' : Math.abs(xteM)<60 ? '#fbbf24' : '#ef4444';
+  } else {
+    document.getElementById('hudCTS').textContent='—';
+    banner.className='idle';
+    banner.textContent = estado.autopilot ? '— piloto activo, sin más waypoints —' : '— trace una derrota para guiado —';
+    wpBadge.textContent = (estado.ruta && estado.ruta.length>0) ? 'Derrota trazada — active el PILOTO AUTO para seguirla' : 'Sin derrota planeada';
+    xteFill.style.left='50%'; xteFill.style.background='#2fd4e8';
+  }
+}
+
+/* =========================================================================
    7. GRÁFICAS EN TIEMPO REAL
    ========================================================================= */
 const chartAbat = new Chart(document.getElementById('chartAbat'), {
@@ -703,6 +1019,8 @@ function frame(ts){
   let dtSim = dtReal*simSpeed;
   const subSteps = Math.min(20, Math.max(1, Math.ceil(dtSim/0.5)));
   const dtStep = dtSim/subSteps;
+  actualizarGuia();
+  if(estado.autopilot) pilotoAutomatico();
   for(let i=0;i<subSteps;i++) pasoFisico(dtStep);
 
   const {lat,lon,hdgDeg} = actualizarIconoBuque();
@@ -719,6 +1037,7 @@ function frame(ts){
   const derivaTotal = sog>0.05 ? angDiff(cogDeg,hdgDeg) : 0;
 
   actualizarVectores(lat,lon,hdgDeg,cogDeg);
+  actualizarCompassHUD(hdgDeg,cogDeg,amb);
 
   const prof = profundidadEn(lat,lon);
   const ukc = prof + amb.marea - ship.T;
@@ -854,11 +1173,11 @@ function pausarSim(){
 function resetSim(){
   estado.simActiva=false; estado.heading=300*D2R; estado.yawRate=0;
   ctrlP.setThrottleVal(0); ctrlS.setThrottleVal(0);
-  const popa = norm360(300+180);
-  estado.azP=popa; estado.azS=popa;
-  document.getElementById('azReadoutP').textContent=String(Math.round(popa)).padStart(3,'0')+'°';
-  document.getElementById('azReadoutS').textContent=String(Math.round(popa)).padStart(3,'0')+'°';
+  estado.azP=0; estado.azS=0; estado.wpIndex=0;
+  document.getElementById('azReadoutP').textContent='000°';
+  document.getElementById('azReadoutS').textContent='000°';
   if(!estado.manual) toggleManual();
+  if(estado.autopilot) toggleAutopilot();
   borrarRuta();
   ubicarBuque();
   document.getElementById('simStatus').textContent='● SIM LISTA'; document.getElementById('simStatus').className='';
