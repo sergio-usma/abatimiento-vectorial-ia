@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kml><GroundOverlay><name>z17-single.png</name><color>88ffffff</color><Icon>
+<href>z17-single.png</href>
+<viewBoundScale>0.75</viewBoundScale></Icon><LatLonBox>
+<north>10.4351227208919</north>
+<south>10.2628766656853</south>
+<east>-75.4877471923828</east>
+<west>-75.6151413917542</west>
+</LatLonBox></GroundOverlay></kml>

@@ -1,0 +1,18 @@
+!table
+!version 300
+!charset Neutral
+
+Definition Table
+  File "z17-single.png"
+  Type "RASTER"
+  (-75.61514139, 10.43512272) (0, 0) Label "Point 1",
+  (-75.48774719, 10.26287667) (5937, 8160) Label "Point 2",
+  (-75.61514139, 10.26287667) (0, 8160) Label "Point 3",
+  (-75.48774719, 10.43512272) (5937, 0) Label "Point 4",
+  (-75.55143356, 10.34901151) (2968, 4080) Label "Point 5",
+  (-75.55143356, 10.43512272) (2968, 0) Label "Point 6",
+  (-75.61514139, 10.34901151) (0, 4080) Label "Point 7",
+  (-75.48774719, 10.34901151) (5937, 4080) Label "Point 8",
+  (-75.55143356, 10.26287667) (2968, 8160) Label "Point 9"
+ CoordSys Earth Projection 10, 157, 7, 0
+ Units "degree"
