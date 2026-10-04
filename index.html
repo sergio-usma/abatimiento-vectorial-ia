@@ -4,6 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>⚓ ECDIS MVP — Doble Propulsor Azimutal + IA | Bahía de Cartagena</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -182,13 +185,86 @@
   .fd-row span:first-child{color:var(--dim);}
   .fd-row span:last-child{color:var(--green);font-weight:700;text-align:right;}
   .fd-row.net span:last-child{color:var(--amber);}
+
+  /* ---- Bridge console / Scandinavian charting skin ---- */
+  :root{
+    --bg:#08151f; --panel:#0c202c; --panel2:#0a1923; --line:#214151;
+    --cyan:#71d3d0; --green:#b7df9b; --amber:#f4c76a; --red:#ef8b83;
+    --violet:#b7a8e6; --text:#e0e9e7; --dim:#88a4aa;
+    --surface:rgba(9,27,38,.92); --hairline:rgba(184,220,218,.13);
+  }
+  body{font-family:'Manrope',system-ui,sans-serif;background:#061018;color:var(--text);letter-spacing:.01em;}
+  #app{grid-template-columns:300px 1fr 318px;grid-template-rows:60px 1fr;gap:0;background:#061018;}
+  #app.hide-left{grid-template-columns:0 1fr 318px;} #app.hide-right{grid-template-columns:300px 1fr 0;}
+  #app.hide-left.hide-right{grid-template-columns:0 1fr 0;}
+  header{padding:0 22px;background:rgba(8,25,36,.96);border-bottom:1px solid var(--hairline);box-shadow:0 8px 30px rgba(0,0,0,.22);gap:12px;}
+  header h1{font-family:'Manrope',sans-serif;font-size:12px;font-weight:800;color:#edf6f3;letter-spacing:.14em;line-height:1.2;text-shadow:none;}
+  header h1:first-letter{color:var(--cyan);}
+  header .badge{margin-left:0;color:var(--cyan);background:rgba(113,211,208,.08);border:1px solid rgba(113,211,208,.34);padding:5px 9px;border-radius:5px;font-size:8px;letter-spacing:.12em;}
+  header .status{gap:8px;font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+  header .status span{padding:7px 9px;border:1px solid var(--hairline);border-radius:4px;color:var(--green);background:rgba(183,223,155,.04);}
+  header .status .warn{color:var(--amber);background:rgba(244,199,106,.05);} header .status .danger{color:var(--red);}
+  header .status .btn.small{padding:7px 9px;background:transparent;border-color:var(--hairline);color:var(--dim);font-weight:700;}
+  header .status .btn.small:hover{background:var(--cyan);color:#071820;border-color:var(--cyan);box-shadow:none;}
+  .panel{padding:18px 16px;background:linear-gradient(180deg,rgba(12,32,44,.98),rgba(7,23,33,.98));border:0;border-right:1px solid var(--hairline);}
+  #panelTelemetria{border-right:0;border-left:1px solid var(--hairline);}
+  .panel h3{font-size:9px;color:var(--cyan);letter-spacing:.16em;margin:18px 0 10px;padding:0 0 8px;border-bottom:1px solid var(--hairline);font-weight:800;}
+  .panel h3:first-child{margin-top:0;}
+  .panel h3::before{content:'// ';color:#66858e;}
+  .field{font-size:10px;margin-bottom:7px;min-height:24px;}
+  .field label{color:#a5bbbc;font-weight:500;}
+  .field input,.field select{width:88px;background:#071720;border:1px solid #274652;color:var(--cyan);padding:6px 7px;border-radius:3px;font-family:'DM Mono',monospace;font-size:10px;}
+  .field input:focus,.field select:focus{border-color:var(--cyan);box-shadow:0 0 0 2px rgba(113,211,208,.12);}
+  .btn{padding:9px 8px;margin-top:6px;background:#102b38;border:1px solid #315564;color:#ccebea;border-radius:3px;font-size:9px;font-weight:800;letter-spacing:.1em;transition:background .15s,border-color .15s,transform .15s;}
+  .btn:hover{background:#173e4b;color:#fff;box-shadow:none;border-color:var(--cyan);transform:translateY(-1px);}
+  .btn.success{border-color:rgba(183,223,155,.55);color:var(--green);background:rgba(183,223,155,.07);} .btn.danger{border-color:rgba(239,139,131,.45);color:var(--red);}
+  .telemetry{background:rgba(4,17,25,.55);border:1px solid var(--hairline);border-radius:4px;padding:9px 10px;margin-bottom:12px;font-family:'DM Mono',monospace;font-size:9px;}
+  .telemetry .row{padding:4px 0;border-bottom:1px solid rgba(184,220,218,.05);} .telemetry .row:last-child{border-bottom:0;}
+  .telemetry .row span:first-child{color:#78979e;} .telemetry .row span:last-child{color:var(--green);font-weight:500;}
+  .chart-container{background:rgba(4,17,25,.55);border:1px solid var(--hairline);border-radius:4px;padding:9px;margin-bottom:12px;height:130px;}
+  .hint,.route-info{font-family:'Manrope',sans-serif;color:#729198;line-height:1.45;}
+  #map{background:#071820;}
+  .leaflet-container{background:#071820 !important;}
+  .leaflet-control-zoom{border:1px solid var(--hairline)!important;box-shadow:0 4px 20px rgba(0,0,0,.25)!important;}
+  .leaflet-control-zoom a{background:#0b2430!important;color:#b9d8d5!important;border-color:var(--hairline)!important;}
+  .legend,#gameCompass,#forceDiagram,#simDock{background:rgba(7,23,32,.9);border:1px solid rgba(184,220,218,.2);box-shadow:0 12px 32px rgba(0,0,0,.28);backdrop-filter:blur(12px);}
+  #gameCompass{top:16px;width:330px;padding:8px 12px 9px;border-radius:5px;}
+  #compassCanvas{width:100%;height:42px;}
+  .compass-readout{font-family:'DM Mono',monospace;font-size:9px;gap:14px;}
+  #correctionBanner{font-family:'Manrope',sans-serif;font-size:9px;letter-spacing:.08em;}
+  #simDock{right:16px;bottom:16px;padding:12px 14px;border-radius:5px;gap:10px;}
+  #forceDiagram{left:16px;bottom:58px;border-radius:5px;}
+  #cursorStatus{position:absolute;left:16px;bottom:16px;z-index:700;display:flex;align-items:center;gap:10px;min-width:198px;padding:7px 10px;background:rgba(7,23,32,.94);border:1px solid rgba(184,220,218,.22);border-radius:4px;box-shadow:0 8px 24px rgba(0,0,0,.3);backdrop-filter:blur(12px);pointer-events:none;font-family:'DM Mono',monospace;white-space:nowrap;}
+  #cursorStatus .status-label{font-family:'Manrope',sans-serif;font-size:8px;font-weight:800;letter-spacing:.13em;color:var(--cyan);}
+  #cursorStatus .status-coord{font-size:9px;color:#e0e9e7;letter-spacing:.02em;}
+  #cursorStatus .status-coord em{font-style:normal;color:var(--green);}
+  #simDock .dockLabel,#forceDiagram .dockLabel{background:#071720;color:var(--cyan);font-size:8px;font-weight:800;}
+  .thruster-unit{background:rgba(255,255,255,.025);border-color:var(--hairline);border-radius:4px;}
+  .thruster-unit .tlabel{font-size:8px;letter-spacing:.13em;color:var(--amber);}
+  .azimuth-readout,.thr-readout{font-family:'DM Mono',monospace;}
+  .thr-track{background:#06141c;border-color:#31515b;}
+  .mode-actions .btn{width:102px;}
+  #rosaVientos.mini{top:16px;right:16px;width:64px;height:64px;background:rgba(7,23,32,.82);border-color:rgba(113,211,208,.4);}
+  .shallow-warning{top:72px;background:var(--amber);box-shadow:0 8px 28px rgba(244,199,106,.22);font-size:10px;}
+  .sounding-lbl{font-family:'DM Mono',monospace;}
+  @media (max-width:1100px){
+    #app{grid-template-columns:260px 1fr 280px;} #app.hide-left{grid-template-columns:0 1fr 280px;} #app.hide-right{grid-template-columns:260px 1fr 0;}
+    header h1{font-size:10px;} header .badge{display:none;} header .status span{display:none;}
+    #forceDiagram{display:none;} #cursorStatus{left:10px;bottom:10px;} #simDock{right:10px;bottom:10px;transform:scale(.9);transform-origin:bottom right;}
+  }
+  @media (max-width:760px){
+    body{overflow:auto;} #app{display:flex;flex-direction:column;height:auto;min-height:100vh;} header{height:56px;flex:0 0 56px;padding:0 12px;position:sticky;top:0;z-index:1200;} header h1{font-size:9px;max-width:180px;} header .status{margin-left:auto;gap:4px;} header .status .btn.small{font-size:8px;padding:6px 7px;}
+    #map{order:2;height:70vh;min-height:520px;flex:none;} .panel{order:3;max-height:none;overflow:visible;border:0!important;border-top:1px solid var(--hairline)!important;} #panelTelemetria{order:4;} #panelBuque.collapsed,#panelTelemetria.collapsed{display:none;}
+    #gameCompass{top:10px;width:270px;} #rosaVientos.mini{top:10px;right:10px;width:56px;height:56px;} #cursorStatus{left:10px;bottom:10px;min-width:0;padding:6px 8px;} #cursorStatus .status-label{display:none;} #simDock{left:10px;right:10px;bottom:10px;justify-content:center;transform:none;overflow-x:auto;} #simDock .thruster-unit{min-width:128px;} #simDock .mode-actions{min-width:105px;} #simDock .dockLabel{left:10px;}
+    .panel h3{margin-top:22px;}
+  }
 </style>
 </head>
 <body>
 <div id="app">
   <header>
-    <h1>⚓ ECDIS MVP — DOBLE PROPULSOR AZIMUTAL &amp; COPILOTO IA</h1>
-    <span class="badge">Bahía de Cartagena + Caribe · MVP</span>
+    <h1>⚓ ASD BRIDGE SIMULATOR <span style="color:var(--dim);font-weight:500;letter-spacing:.08em;">/ DOBLE AZIMUTAL</span></h1>
+    <span class="badge">CARTAGENA · TRAINING MODE</span>
     <div class="status">
       <span id="gpsStatus">● GPS OK</span>
       <span id="aisStatus">● AIS SYNC</span>
@@ -226,8 +302,8 @@
     <p class="hint" style="text-align:left;max-width:none;">El viento se define por su procedencia (convención meteorológica); la corriente, por su destino ("set", convención oceanográfica). Con "corriente ligada al viento" activo, el set/drift se calculan del viento (deriva superficial ≈3% de la velocidad del viento, desviada ~20° a la derecha por efecto Ekman/Coriolis en el hemisferio norte); desactívela para modelar una corriente propia de la zona/temporada (p.ej. marea o Canal del Dique). Default de oleaje (0,2–0,5 m) según registros CIOH en playas de Crespo, Cartagena.</p>
 
     <h3>Posición inicial (DDMMSS)</h3>
-    <div class="field"><label>Lat N</label><input type="text" id="latDMS" value="101830N"></div>
-    <div class="field"><label>Lon W</label><input type="text" id="lonDMS" value="0754020W"></div>
+    <div class="field"><label>Lat N</label><input type="text" id="latDMS" value="102322.6N"></div>
+    <div class="field"><label>Lon W</label><input type="text" id="lonDMS" value="0753210.5W"></div>
     <button class="btn" onclick="ubicarBuque()">🎯 UBICAR EN LA CARTA</button>
 
     <h3>Simulación</h3>
@@ -255,6 +331,10 @@
   <div id="map">
     <div id="seaWaves"></div>
     <canvas id="currentFlowCanvas"></canvas>
+    <div id="cursorStatus" aria-live="polite">
+      <span class="status-label">CURSOR ECDIS</span>
+      <span class="status-coord" id="cursorCoordinates">LAT — · LON —</span>
+    </div>
     <div id="rosaVientos" class="mini" onclick="onClickRosa(event)" title="Rosa de los vientos — clic para ampliar">
       <button id="rosaCerrar" onclick="event.stopPropagation(); toggleRosa(false);" title="Minimizar">✕</button>
       <canvas id="rosaCanvas" width="340" height="340"></canvas>
@@ -290,13 +370,20 @@
       </div>
     </div>
     <div id="simDock">
-      <span class="dockLabel">Gobierno del buque</span>
+      <span class="dockLabel">ASD · CONSOLE / GOBIERNO DEL BUQUE</span>
+
+      <div class="console-meta">
+        <span class="console-kicker">Azimuth drive</span>
+        <span class="console-title">TUG<br>BRIDGE</span>
+        <span class="console-subtitle">DUAL Z-PROP</span>
+        <span class="console-rule">SYSTEM READY</span>
+      </div>
 
       <div class="thruster-unit">
         <span class="tlabel">BABOR (P)</span>
         <canvas class="azimuth-canvas" id="azCanvasP" width="104" height="104"></canvas>
         <div class="az-throttle-row">
-          <div class="thr-track" id="thrTrackP"><div class="thr-fill" id="thrFillP"></div><div class="thr-handle" id="thrHandleP"></div></div>
+          <div class="thr-lever-shell"><div class="thr-scale"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><div class="thr-track" id="thrTrackP"><div class="thr-fill" id="thrFillP"></div><div class="thr-handle" id="thrHandleP"></div></div></div>
           <div style="display:flex;flex-direction:column;gap:2px;">
             <span class="azimuth-readout" id="azReadoutP">000°</span>
             <span class="thr-readout" id="thrReadoutP">0%</span>
@@ -308,7 +395,7 @@
         <span class="tlabel">ESTRIBOR (S)</span>
         <canvas class="azimuth-canvas" id="azCanvasS" width="104" height="104"></canvas>
         <div class="az-throttle-row">
-          <div class="thr-track" id="thrTrackS"><div class="thr-fill" id="thrFillS"></div><div class="thr-handle" id="thrHandleS"></div></div>
+          <div class="thr-lever-shell"><div class="thr-scale"><span>100</span><span>75</span><span>50</span><span>25</span><span>0</span></div><div class="thr-track" id="thrTrackS"><div class="thr-fill" id="thrFillS"></div><div class="thr-handle" id="thrHandleS"></div></div></div>
           <div style="display:flex;flex-direction:column;gap:2px;">
             <span class="azimuth-readout" id="azReadoutS">000°</span>
             <span class="thr-readout" id="thrReadoutS">0%</span>
@@ -398,9 +485,55 @@ const RASTER_B64 = "iVBORw0KGgoAAAANSUhEUgAAAmwAAAJsCAYAAABAlf8lAAAAOnRFWHRTb2Z0
 /* =========================================================================
    1. MAPA BASE, RASTER BATIMÉTRICO Y SONDEOS
    ========================================================================= */
-const bounds = [[BATHY.lat_min, BATHY.lon_min],[BATHY.lat_max, BATHY.lon_max]];
-const map = L.map('map', { zoomControl:true, attributionControl:false }).fitBounds(bounds);
-L.imageOverlay('data:image/png;base64,' + RASTER_B64, bounds, {opacity:0.92}).addTo(map);
+/* Carta náutica georreferenciada EPSG:3857 (PNG world file + KML). */
+const CHART_BOUNDS = [[10.2628766656853, -75.6151413917542], [10.4351227208919, -75.4877471923828]];
+const CHART_INITIAL_ZOOM = 17;
+const bounds = CHART_BOUNDS;
+const map = L.map('map', {
+  crs:L.CRS.EPSG3857,
+  zoomControl:true,
+  attributionControl:false,
+  maxBounds:L.latLngBounds(CHART_BOUNDS),
+  maxBoundsViscosity:1
+});
+L.imageOverlay('map/z17-single.png', CHART_BOUNDS, {opacity:1, interactive:false}).addTo(map);
+const chartExtent = L.latLngBounds(CHART_BOUNDS);
+function actualizarZoomMinimoCarta(){
+  if(!map || !map.getSize().x || !map.getSize().y) return;
+  // `inside=true` selecciona el nivel en el que el viewport queda
+  // completamente cubierto por la carta. Con `false` Leaflet encaja toda
+  // la carta dentro del viewport y deja visible el fondo fuera del raster.
+  const zoomMinimo = map.getBoundsZoom(chartExtent, true);
+  map.setMinZoom(zoomMinimo);
+  if(map.getZoom() < zoomMinimo) map.setZoom(zoomMinimo, {animate:false});
+}
+actualizarZoomMinimoCarta();
+map.on('resize', actualizarZoomMinimoCarta);
+function puntoDentroCarta(lat, lon){ return chartExtent.contains([lat,lon]); }
+function limitarPuntoACarta(point){
+  return {
+    lat:Math.max(CHART_BOUNDS[0][0], Math.min(CHART_BOUNDS[1][0], point.lat)),
+    lon:Math.max(CHART_BOUNDS[0][1], Math.min(CHART_BOUNDS[1][1], point.lon))
+  };
+}
+
+function gradosMinutosSegundos(value, isLat){
+  const hemi = isLat ? (value >= 0 ? 'N' : 'S') : (value >= 0 ? 'E' : 'W');
+  const abs = Math.abs(value);
+  const grados = Math.floor(abs);
+  const minutosDec = (abs-grados)*60;
+  const minutos = Math.floor(minutosDec);
+  const segundos = (minutosDec-minutos)*60;
+  return `${String(grados).padStart(isLat?2:3,'0')}°${String(minutos).padStart(2,'0')}'${segundos.toFixed(1).padStart(4,'0')}"${hemi}`;
+}
+function actualizarPosicionCursor(e){
+  document.getElementById('cursorCoordinates').innerHTML = `LAT <em>${gradosMinutosSegundos(e.latlng.lat,true)}</em> · LON <em>${gradosMinutosSegundos(e.latlng.lng,false)}</em>`;
+}
+function limpiarPosicionCursor(){
+  document.getElementById('cursorCoordinates').textContent = 'LAT — · LON —';
+}
+map.on('mousemove', actualizarPosicionCursor);
+map.on('mouseout', limpiarPosicionCursor);
 
 const boyas = [
   {lat:10.3115, lon:-75.5735, tipo:'red', nombre:'BOYA 2 — Entrada Bocachica'},
@@ -410,11 +543,13 @@ const boyas = [
   {lat:10.3985, lon:-75.5545, tipo:'yellow', nombre:'CARDINAL — Bocagrande (bajo histórico)'},
 ];
 boyas.forEach(b=>{
+  if(!puntoDentroCarta(b.lat,b.lon)) return;
   L.marker([b.lat,b.lon], {icon:L.divIcon({className:`buoy-icon buoy-${b.tipo}`, iconSize:[13,13]})}).addTo(map).bindPopup(`<b>${b.nombre}</b>`);
 });
 
 const soundingLayer = L.layerGroup().addTo(map);
 SOUNDINGS.forEach(([lat,lon,d])=>{
+  if(!puntoDentroCarta(lat,lon)) return;
   const ent = Math.floor(d);
   const dec = Math.round((d - ent)*10);
   const crit = d < 3 ? ' crit' : '';
@@ -1110,7 +1245,7 @@ map.on('click', function(e){
 function borrarRuta(){ estado.ruta=[]; estado.wpIndex=0; estado.guia=null; redibujarRuta(); }
 function redibujarRuta(){
   routeLayer.clearLayers();
-  const pts = estado.ruta;
+  const pts = estado.ruta.filter(p=>puntoDentroCarta(p.lat,p.lon));
   if(pts.length===0){ document.getElementById('routeInfo').textContent='Sin derrota planeada.'; return; }
   const latlngs = pts.map(p=>[p.lat,p.lon]);
   L.polyline(latlngs, {color:'#f97316', weight:2.5, dashArray:'6,5', opacity:.9}).addTo(routeLayer);
@@ -1297,8 +1432,11 @@ function ubicarBuque(){
   const lon = dmsToDecimal(document.getElementById('lonDMS').value, false);
   inicializarFisica(lat,lon);
   if(shipMarker) map.removeLayer(shipMarker);
-  shipMarker = L.marker([lat,lon], {icon:shipIcon}).addTo(map);
-  map.setView([lat,lon], 14);
+  shipMarker = L.marker([lat,lon], {icon:shipIcon, opacity:puntoDentroCarta(lat,lon)?1:0}).addTo(map);
+  // La vista inicial se centra en el GPS simulado; después el usuario puede
+  // desplazar libremente la carta como en un ECDIS, sin que el buque sea
+  // recentrado automáticamente durante la navegación.
+  map.setView([lat,lon], CHART_INITIAL_ZOOM, {animate:false});
   trackLayer.clearLayers(); vectorLayer.clearLayers();
   estado.historial = {t:[],abat:[],deriva:[]};
   estado.tSim = 0;
@@ -1309,7 +1447,7 @@ function dmsToDecimal(dms,isLat){
   const hemi = str.slice(-1); const nums = str.slice(0,-1);
   const dd = isLat? parseInt(nums.slice(0,2)) : parseInt(nums.slice(0,3));
   const mm = isLat? parseInt(nums.slice(2,4)) : parseInt(nums.slice(3,5));
-  const ss = isLat? parseInt(nums.slice(4,6)||0) : parseInt(nums.slice(5,7)||0);
+  const ss = isLat? parseFloat(nums.slice(4)||0) : parseFloat(nums.slice(5)||0);
   let dec = dd+mm/60+ss/3600;
   if(hemi==='S'||hemi==='W') dec=-dec;
   return dec;
@@ -1317,10 +1455,12 @@ function dmsToDecimal(dms,isLat){
 
 function actualizarVectores(lat,lon,hdgDeg,cogDeg){
   vectorLayer.clearLayers();
+  if(!puntoDentroCarta(lat,lon)) return;
   const base=0.006, baseAmb=0.0022;
+  const vectorVisualScale = 0.3;
   function seg(deg,len,color,dash){
     const rad=deg*D2R;
-    const p2 = {lat:lat+len*Math.cos(rad), lon:lon+len*Math.sin(rad)};
+    const p2 = limitarPuntoACarta({lat:lat+len*Math.cos(rad), lon:lon+len*Math.sin(rad)});
     L.polyline([[lat,lon],[p2.lat,p2.lon]], {color,weight:3,dashArray:dash,opacity:.92}).addTo(vectorLayer);
     return p2;
   }
@@ -1331,16 +1471,18 @@ function actualizarVectores(lat,lon,hdgDeg,cogDeg){
   function puntaFlecha(p2, deg, color, sizeDeg){
     const rad = deg*D2R;
     const backL = norm360(deg+180-25)*D2R, backR = norm360(deg+180+25)*D2R;
-    const pL = {lat:p2.lat+sizeDeg*Math.cos(backL), lon:p2.lon+sizeDeg*Math.sin(backL)};
-    const pR = {lat:p2.lat+sizeDeg*Math.cos(backR), lon:p2.lon+sizeDeg*Math.sin(backR)};
+    const pL = limitarPuntoACarta({lat:p2.lat+sizeDeg*Math.cos(backL), lon:p2.lon+sizeDeg*Math.sin(backL)});
+    const pR = limitarPuntoACarta({lat:p2.lat+sizeDeg*Math.cos(backR), lon:p2.lon+sizeDeg*Math.sin(backR)});
     L.polygon([[p2.lat,p2.lon],[pL.lat,pL.lon],[pR.lat,pR.lon]], {color, fillColor:color, fillOpacity:.95, weight:1, opacity:.95}).addTo(vectorLayer);
   }
-  const pHdg = seg(hdgDeg, base*1.4, '#4ade80', '8,8');
-  const pCog = seg(cogDeg, base*1.4, '#00d4ff', '8,8');
+  const pHdg = seg(hdgDeg, base*1.4*vectorVisualScale, '#4ade80', '8,8');
+  const pCog = seg(cogDeg, base*1.4*vectorVisualScale, '#00d4ff', '8,8');
   L.polyline([[pCog.lat,pCog.lon],[pHdg.lat,pHdg.lon]], {color:'#f97316',weight:4,dashArray:'4,4'}).addTo(vectorLayer);
   const amb = leerAmbiente();
-  const lenViento = baseAmb*Math.min(amb.vKn,40)/10;
-  const lenCorriente = baseAmb*Math.min(amb.cKn,10)*3;
+  // Escala visual únicamente: no modifica la física ni los valores de
+  // telemetría. Se reduce el trazo y, al depender de él, la punta al 30%.
+  const lenViento = baseAmb*Math.min(amb.vKn,40)/10*vectorVisualScale;
+  const lenCorriente = baseAmb*Math.min(amb.cKn,10)*3*vectorVisualScale;
   const dirViento = norm360(amb.vDirFrom+180); // hacia donde sopla
   const pViento = seg(dirViento, lenViento, '#ef4444', null);
   puntaFlecha(pViento, dirViento, '#ef4444', lenViento*0.35);
@@ -1484,6 +1626,7 @@ function actualizarIconoBuque(){
   const {lat,lon} = xyToLatLon(shipBody.position.x, shipBody.position.y);
   const hdgDeg = norm360(estado.heading*R2D);
   shipMarker.setLatLng([lat,lon]);
+  shipMarker.setOpacity(puntoDentroCarta(lat,lon) ? 1 : 0);
   const el = shipMarker.getElement();
   if(el){ const svg=el.querySelector('.ship-hull'); if(svg) svg.style.transform = `rotate(${hdgDeg}deg)`; }
   return {lat,lon,hdgDeg};
@@ -1534,7 +1677,7 @@ function frame(ts){
   trackAccum += dtSim;
   if(trackAccum>1.2){
     trackAccum=0;
-    L.circleMarker([lat,lon], {radius:1.6, color:'#00d4ff', fillColor:'#00d4ff', fillOpacity:.55, weight:0}).addTo(trackLayer);
+    if(puntoDentroCarta(lat,lon)) L.circleMarker([lat,lon], {radius:1.6, color:'#00d4ff', fillColor:'#00d4ff', fillOpacity:.55, weight:0}).addTo(trackLayer);
     const layers = trackLayer.getLayers();
     if(layers.length>150) trackLayer.removeLayer(layers[0]);
   }
@@ -1656,7 +1799,11 @@ function togglePanel(panelId){
   // Leaflet y los canvas de overlay necesitan recalcular tamaño tras la
   // transición del grid (se dispara el evento 'resize' del mapa, que ya
   // escuchan currentFlowCanvas/rosaCanvas).
-  setTimeout(()=>{ if(map) map.invalidateSize(); }, 200);
+  setTimeout(()=>{
+    if(!map) return;
+    map.invalidateSize();
+    actualizarZoomMinimoCarta();
+  }, 200);
 }
 function actualizarBotonPower(){
   const btn = document.getElementById('powerBtn');
