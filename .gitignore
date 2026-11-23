@@ -1,2 +1,8 @@
 .opencode/
 agents.md
+# Secretos y configuracion local (nunca versionar claves)
+js/config.local.js
+.env
+.env.*
+.dev.vars
+node_modules/

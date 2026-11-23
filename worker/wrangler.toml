@@ -1,0 +1,13 @@
+name = "asd-realtime-token"
+main = "realtime-token.js"
+compatibility_date = "2025-09-01"
+
+[vars]
+# Origen(es) de tu GitHub Pages, sin barra final. Separa varios con comas.
+# Ejemplo: "https://TU-USUARIO.github.io"
+ALLOWED_ORIGINS = "https://TU-USUARIO.github.io"
+MODEL = "gpt-realtime"
+VOICE = "marin"
+
+# La clave real NO va aquí. Se guarda como secreto:
+#   npx wrangler secret put OPENAI_API_KEY

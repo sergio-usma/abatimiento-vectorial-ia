@@ -1,0 +1,60 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pruebas de las herramientas de voz
+        run: node --test tests/
+
+      - name: Verificar que no hay claves en el repositorio
+        run: |
+          if git grep -nE 'sk-(proj-)?[A-Za-z0-9_-]{20,}' -- . ':!*.md' ':!.github'; then
+            echo "Se encontró algo con forma de clave de OpenAI. Elimínala y rótala." >&2
+            exit 1
+          fi
+
+      - name: Armar el sitio estático
+        run: |
+          mkdir -p _site/js _site/assets _site/map _site/controles
+          cp index.html _site/
+          cp js/config.js js/orders.js js/voice-tools.js js/audio.js js/sim-api.js js/voice.js _site/js/
+          cp -r vendor _site/vendor
+          cp -r assets/fonts _site/assets/fonts
+          cp map/z17-single.webp _site/map/
+          cp controles/control.webp _site/controles/
+          touch _site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
