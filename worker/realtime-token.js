@@ -41,7 +41,7 @@ export default {
         expires_after: { anchor: 'created_at', seconds: 60 },
         session: {
           type: 'realtime',
-          model: env.MODEL || 'gpt-realtime',
+          model: env.MODEL || 'gpt-realtime-1.5',
           audio: { output: { voice: env.VOICE || 'marin' } }
         }
       })

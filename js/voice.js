@@ -7,7 +7,7 @@
  *   3. Se ejecuta al instante con VoiceTools/SimAPI y Marina repite con una frase fija y breve, generada localmente (voz del navegador:
  *      sin segunda vuelta al modelo). Opcional: voz natural de OpenAI.
  *   4. La transcripción (en paralelo, solo informa) se compara con la base: si lo oído era otra orden, se avisa en pantalla.
- *   5. Sin pedirlo, solo habla una alarma crítica y "rumbo alcanzado". Informes y recomendaciones, solo si los pides.
+ *   5. Marina NUNCA habla por iniciativa propia: alarmas y "rumbo alcanzado" son solo tono y pantalla. Informes y sugerencias, solo si los pides.
  *
  * La práctica escrita y las frases de la guía usan la gramática local (js/grammar.js): instantáneas y sin conexión.
  *
@@ -18,33 +18,19 @@
 (function(){
   'use strict';
 
-  const cfg = Object.assign({ model:'gpt-realtime', voice:'marin', transcriptionModel:'gpt-4o-mini-transcribe', tokenEndpoint:null, openaiKey:null }, window.ASD_CONFIG || {});
+  const cfg = Object.assign({ model:'gpt-realtime-1.5', voice:'marin', transcriptionModel:'gpt-4o-mini-transcribe', reasoning:null, tokenEndpoint:null, openaiKey:null }, window.ASD_CONFIG || {});
+  const VP = window.ASDVoicePrompt;
   const byId = id => document.getElementById(id);
   const KEY_STORE = 'asd.openaiKey';
   const MIN_HOLD_MS = 250;
   const DB_URL = 'data/bridge-commands.json';
-
-  /* Herramientas "de consulta" y de control que el modelo puede llamar además de las órdenes. Todas llevan lang y wake. */
-  const QUERY = {
-    report_heading:  { tool:'get_status',   id:'q_heading',   desc:'El práctico pregunta el rumbo ("¿cuál es el rumbo?", "what is the heading").' },
-    report_status:   { tool:'get_status',   id:'q_status',    desc:'El práctico pide el estado ("informa el estado", "report status").' },
-    report_drift:    { tool:'drift_report', id:'q_drift',     desc:'El práctico pide el informe de deriva o caída ("¿cómo cae la proa?", "report drift").' },
-    recommendation:  { tool:'drift_report', id:'q_recommend', desc:'El práctico pide una recomendación ("recomendación", "what do you recommend").' }
-  };
-  const CONTROL = {
-    confirm: 'El práctico confirma una acción pendiente ("confirmo", "sí, hazlo", "confirm").',
-    cancel:  'El práctico cancela una acción pendiente ("cancela", "negativo", "cancel").',
-    repeat:  'El práctico pide repetir lo último ("repite", "say again").',
-    unclear: 'Hay una orden pero no la entiendes bien o no está en la lista (incluye un rumbo dicho como número, por ejemplo "treinta"). No ejecuta nada: Marina dirá "Repita".',
-    ignore:  'No es una orden de puente: charla, ruido, una frase suelta, o en manos libres una frase que no empieza por "Marina". No hace nada.'
-  };
 
   /* ---------- Estado ---------- */
   let pc = null, dc = null, micStream = null, micTrack = null, audioEl = null;
   let state = 'off';            // off | connecting | ready | listening | thinking | speaking | error
   let handsFree = false;
   let holding = false, holdStart = 0, heardStart = 0;
-  let tools = null, grammar = null, grammarReady = null, sessionTools = null, instructions = '';
+  let tools = null, grammar = null, grammarReady = null, sessionTools = null, instructions = '', dbRef = null;
   let assistantBusy = false;
   let busyTimer = null;
   let lastLang = 'es', lastSaid = null;
@@ -52,6 +38,12 @@
   const handledCalls = new Set();
   const queue = new Map();      // key -> {text, lang}
   const lastAt = new Map();     // key -> ts (antirrebote)
+  const callItems = new Set();  // ids de function_call / function_call_output del turno: se borran al terminar la respuesta (turnos sin estado)
+  const audioItems = new Map(); // id del audio del práctico -> temporizador de borrado (se borra al llegar su transcripción)
+  const voiceLog = [];          // registro en memoria de los últimos turnos: lo oído, la llamada y las latencias
+  let evalWait = null;          // evaluador de frases: intercepta la llamada del modelo en lugar de ejecutarla
+  let speechEndAt = 0;
+  let pendingUnclear = null;    // { lang, missing, timer }: espera la transcripción un instante antes de preguntar, por si el analizador local la resuelve
 
   const LABEL = { off:'Voz desconectada', connecting:'Conectando…', ready:'Lista', listening:'Escuchando', thinking:'Procesando', speaking:'Hablando', error:'Error de voz' };
 
@@ -111,38 +103,39 @@
     });
   }
 
-  /* Herramientas de la sesión: las de VoiceTools (menos confirm_action, que lleva token) + consultas y control. Todas con lang y wake. */
+  /* Herramientas e instrucciones de la sesión (js/voice-prompt.js): se reconstruyen al cambiar de manos libres (wake solo aplica ahí). */
   function buildSessionConfig(db){
-    const extra = { lang:{ type:'string', enum:['es','en'], description:'Idioma en que habló el práctico.' },
-                    wake:{ type:'boolean', description:'true solo si la frase empezó por "Marina".' } };
-    const wrap = (name, description, params) => ({ type:'function', name, description,
-      parameters:{ type:'object', properties:Object.assign({}, (params && params.properties) || {}, extra), required:((params && params.required) || []).concat(['lang', 'wake']) } });
-    const list = VoiceTools.definitions.filter(d => d.name !== 'confirm_action' && d.name !== 'get_status' && d.name !== 'drift_report').map(d => wrap(d.name, d.description, d.parameters));
-    Object.keys(QUERY).forEach(n => list.push(wrap(n, QUERY[n].desc)));
-    Object.keys(CONTROL).forEach(n => list.push(wrap(n, CONTROL[n])));
-    sessionTools = list;
-
-    // Instrucciones cortas y de una sola tarea. La tabla sale de la base: ejemplo -> herramienta.
-    const rows = db.commands.filter(c => c.tool && c.kind !== 'query').map(c => `"${c.examples.es[0] || ''}" / "${c.examples.en[0] || ''}" -> ${c.tool}${c.args ? ' ' + JSON.stringify(c.args) : ''}`);
-    instructions = 'Eres el OÍDO de un timonel, no un asistente. Cada vez que el práctico habla, llama EXACTAMENTE UNA herramienta con lo que dijo, sin inventar, completar ni corregir nada. NUNCA hables ni escribas texto.\n' +
-      '- Si no es una orden de la lista, o no estás seguro: unclear. Si es charla o ruido: ignore.\n' +
-      '- Rumbos: tres dígitos hablados uno a uno ("cero nueve cero" = 90). Un rumbo dicho como número ("treinta") es unclear.\n' +
-      '- Viento y corriente: "por el X" = DESDE X. "hacia X" = toward. "a N" = valor absoluto; "en N" o "N más/menos" = incremento (delta_knots, negativo si baja).\n' +
-      '- lang = "en" si habló en inglés, "es" si en español. wake = true solo si la frase empezó por "Marina".\n' +
-      '- Manos libres: si wake es false, llama ignore.\n' +
-      'Ejemplos (frase -> herramienta):\n' + rows.join('\n');
+    dbRef = db; refreshSession();
+  }
+  function refreshSession(){
+    if(!dbRef || !VP) return;
+    sessionTools = VP.buildTools(VoiceTools.definitions, { handsFree });
+    instructions = VP.buildInstructions(dbRef, grammar.parse, { handsFree });
   }
 
   /* ---------- Clave efímera ---------- */
   function savedKey(){ try{ return sessionStorage.getItem(KEY_STORE) || ''; }catch(e){ return ''; } }
   function currentUserKey(){ const el = byId('openaiKey'); return ((el && el.value) || savedKey() || cfg.openaiKey || '').trim(); }
+  /* Clave por defecto (js/default-key.js, ofuscada con js/keybox.js: NO es seguridad, ver su cabecera). Solo se usa si el práctico no
+     puso ninguna en la interfaz y no hay Worker de claves. Se descifra una vez y queda en memoria. */
+  const hasDefaultKey = () => !!(window.ASD_DEFAULT_KEY && window.ASDKeybox);
+  let defaultKeyP = null;
+  function defaultKey(){
+    if(!hasDefaultKey()) return Promise.resolve('');
+    if(!defaultKeyP) defaultKeyP = ASDKeybox.decrypt(window.ASD_DEFAULT_KEY).catch(e => { console.warn('La clave por defecto no se pudo descifrar', e); return ''; });
+    return defaultKeyP;
+  }
+  /* Clave que usará la app: la de la interfaz, y si no hay, la de config o la por defecto. */
+  async function effectiveKey(){ return currentUserKey() || (cfg.tokenEndpoint ? '' : await defaultKey()); }
 
   async function getEphemeralKey(){
     const userKey = currentUserKey();
-    if(userKey){
+    if(userKey || (!cfg.tokenEndpoint && hasDefaultKey())){
+      const apiKey = userKey || await defaultKey();
+      if(!apiKey) throw new Error('Falta la clave de OpenAI (panel "Voz e IA").');
       const r = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
         method:'POST',
-        headers:{ 'Authorization':'Bearer ' + userKey, 'Content-Type':'application/json' },
+        headers:{ 'Authorization':'Bearer ' + apiKey, 'Content-Type':'application/json' },
         body: JSON.stringify({ session:{ type:'realtime', model:cfg.model, audio:{ output:{ voice:cfg.voice } } } })
       });
       const j = await r.json().catch(()=>({}));
@@ -197,7 +190,7 @@
     try{ if(pc) pc.close(); }catch(e){}
     if(micStream) micStream.getTracks().forEach(t => t.stop());
     pc = dc = micStream = micTrack = null; holding = false; assistantBusy = false;
-    queue.clear(); handledCalls.clear();
+    queue.clear(); handledCalls.clear(); if(pendingUnclear){ clearTimeout(pendingUnclear.timer); pendingUnclear = null; } callItems.clear(); audioItems.forEach(clearTimeout); audioItems.clear();
     setState('off');
   }
   function fatal(msg){
@@ -215,10 +208,13 @@
 
   function onOpen(){
     loadGrammar().then(g => {
+      refreshSession();                                   // instrucciones y herramientas según el modo (con o sin manos libres)
       send({ type:'session.update', session:{
         type:'realtime', model:cfg.model,
         output_modalities:['text'],                       // el modelo no habla: solo llama herramientas
         instructions, tools: sessionTools || [], tool_choice:'required', max_output_tokens: 120,
+        truncation:{ type:'retention_ratio', retention_ratio:0.5 },        // respaldo: el borrado por turno ya mantiene el contexto mínimo
+        ...(cfg.reasoning ? { reasoning: cfg.reasoning } : {}),            // gpt-realtime-2: { effort:'minimal' }
         audio:{
           input:{
             // La transcripción corre en paralelo y solo sirve para mostrar "Oí: …" y detectar discrepancias; no retrasa la orden.
@@ -238,7 +234,7 @@
   const natural = () => { const el = byId('voiceNatural'); return !!(el && el.checked); };
   function say(text, lang){
     text = (text || '').trim(); if(!text) return;
-    lastLang = lang || lastLang;
+    lastLang = 'es';                                  // Marina habla siempre en español
     lastSaid = { text, lang: lastLang };
     caption('bot', 'Marina: ' + text, true);
     // Por defecto la voz del navegador: instantánea, sin segunda vuelta al modelo y sin posibilidad de que improvise.
@@ -254,6 +250,7 @@
   /* Una orden, ya reconocida (por el modelo o por la gramática local): se ejecuta y Marina repite. */
   function runParsed(p, extra){
     if(!tools) tools = VoiceTools.create(SimAPI);
+    p = Object.assign({}, p, { lang:'es' });          // respuesta siempre en español, aunque la orden fuera en inglés
     let res;
     if(p.kind === 'confirm'){ res = tools.getPending() ? tools.confirmPending() : { status:'error', error:'no_pending' }; }
     else if(p.kind === 'cancel'){
@@ -261,6 +258,7 @@
       tools.cancelPending(); res = { status:'ok' };
     }
     else if(p.kind === 'repeat'){ if(lastSaid) say(lastSaid.text, lastSaid.lang); return null; }
+    else if(p.kind === 'query') res = execQuery(p.id);
     else res = tools.execute(p.tool, p.args, { origin:'user' });     // se ejecuta ANTES de hablar: la voz no retrasa la maniobra
     refreshConfirmBar();
     if(window.ASDAudio) ASDAudio.play(res && res.status === 'error' ? 'alarmSoft' : 'ack');
@@ -271,31 +269,65 @@
     return res;
   }
 
+  /* Informes: estado + informe de deriva combinados (lectura local, síncrona). Si el informe necesita fuerzas y aún no hay, se dice "Aún no hay datos". */
+  const NEEDS_DRIFT = { q_drift:1, q_leeway:1, q_recommend:1 };
+  function execQuery(id){
+    const st = tools.execute('get_status', {}, { origin:'user' });
+    const dr = tools.execute('drift_report', {}, { origin:'user' });
+    if(NEEDS_DRIFT[id] && dr.status !== 'ok') return dr;
+    return Object.assign({}, dr.status === 'ok' ? dr : {}, st, { status:'ok' });
+  }
+
+  /* Falta un dato o el audio no se entendió: antes de preguntar se espera ~0.9 s la transcripción; si el analizador local la resuelve
+     ("rescate"), se ejecuta. Si no, Marina pregunta lo concreto ("¿Qué rumbo?") y solo dice "Repita" si el audio fue ininteligible. */
+  function askOrRescue(missing, lang){
+    lastLang = lang;
+    if(pendingUnclear) clearTimeout(pendingUnclear.timer);
+    const pu = { missing, lang, timer: null };
+    pu.ask = () => {
+      if(pendingUnclear === pu) pendingUnclear = null;
+      const key = pu.missing && pu.missing !== 'other' ? 'ask_' + pu.missing : null;
+      const out = key && grammar.db.messages[key] ? grammar.speak({ status:'incomplete', missing:pu.missing, lang:pu.lang }) : grammar.speak({ status:'no_match', lang:pu.lang });
+      say(out.text, pu.lang);
+    };
+    pu.timer = setTimeout(pu.ask, 900);
+    pendingUnclear = pu;
+  }
+
   /* Llamada a herramienta del modelo (lo que OYÓ). Solo se ejecuta lo que existe en la base. */
   function onToolCall(name, rawArgs, callId){
     if(callId){ if(handledCalls.has(callId)) return; handledCalls.add(callId); }
     let args = {}; try{ args = typeof rawArgs === 'string' ? JSON.parse(rawArgs || '{}') : (rawArgs || {}); }catch(e){}
-    const lang = args.lang === 'en' ? 'en' : 'es', wake = !!args.wake;
+    const callAt = performance.now();
+    if(evalWait){ const w = evalWait; evalWait = null; w({ name, args, ms: Math.round(callAt - w.t0) }); return; }   // evaluador: no ejecuta nada
+    const lang = 'es', wake = !!args.wake;          // las órdenes pueden darse en inglés, pero Marina responde SIEMPRE en español
     const g = grammar; if(!g) return;
     if(callId) send({ type:'conversation.item.create', item:{ type:'function_call_output', call_id:callId, output:'{"ok":true}' } });   // cierra la llamada, sin respuesta
     assistantBusy = false; if(state === 'thinking') setState('ready');
     lastCall = null;
+    const entry = { t: Date.now(), tool: name, args, lang, modelMs: speechEndAt ? Math.round(callAt - speechEndAt) : null, heard: null };
+    voiceLog.push(entry); if(voiceLog.length > 200) voiceLog.shift();
     if(name === 'ignore') return;
     if(handsFree && !wake) return;                                    // manos libres: solo con "Marina"
-    if(name === 'unclear'){ lastLang = lang; say(g.speak({ status:'no_match', lang }).text, lang); return; }
+    if(name === 'unclear'){ askOrRescue(args.missing, lang); return; }
     let p;
-    if(CONTROL[name] && name !== 'unclear'){ p = { status:'ok', id:name, kind:name, lang, args:{}, caps:{} }; }
-    else if(QUERY[name]){
-      const q = QUERY[name], res = tools.execute(q.tool, {}, { origin:'user' });
-      const out = g.speak({ status:'ok', id:q.id, kind:'query', lang, caps:{} }, res);
-      refreshConfirmBar(); say(out.text, lang); lastCall = { sig:name }; return;
+    if(name === 'confirm' || name === 'cancel' || name === 'repeat'){ p = { status:'ok', id:name, kind:name, lang, args:{}, caps:{} }; }
+    else if(name === 'report'){
+      const rep = VP.REPORTS[args.topic];
+      if(!rep){ say(g.speak({ status:'no_match', lang }).text, lang); return; }
+      p = { status:'ok', id:rep.id, kind:'query', lang, args:{}, caps:{} };
     } else {
       const clean = Object.assign({}, args); delete clean.lang; delete clean.wake;
       p = g.fromTool(name, clean, lang);
-      if(!p){ say(g.speak({ status:'no_match', lang }).text, lang); return; }   // no está en la base: no se ejecuta
+      if(!p){
+        // Fuera de la base pero es una herramienta real del puente: se ejecuta igual (los manejadores validan rangos y las
+        // críticas piden confirmación) y Marina repite con la frase genérica, con el valor ya aplicado. Nada de "Repita".
+        const known = VoiceTools.definitions.some(d => d.name === name && d.name !== 'confirm_action' && d.name !== 'get_status' && d.name !== 'drift_report');
+        if(!known){ askOrRescue('other', lang); return; }
+        p = { status:'ok', id:'loose:' + name, cat:'Libre', kind:'order', tool:name, args:clean, lang, loose:true, caps:{} };
+      }
     }
-    if(p.kind === 'confirm' || p.kind === 'cancel' || p.kind === 'repeat'){ lastCall = { sig:p.kind }; runParsed(p); return; }
-    lastCall = { sig:p.id, tool:p.tool, args:p.args };
+    lastCall = (p.kind === 'query' || p.kind === 'confirm' || p.kind === 'cancel' || p.kind === 'repeat') ? { sig:p.id } : { sig:p.id, tool:p.tool, args:p.args };
     runParsed(p);
   }
 
@@ -303,10 +335,32 @@
   function onTranscript(text){
     text = (text || '').trim(); if(text.length < 2 || !grammar) return;
     caption('user', 'Oí: «' + text + '»', true);
+    const last = voiceLog[voiceLog.length - 1]; if(last && !last.heard) last.heard = text;
     const p = grammar.parse(text);
+    if(pendingUnclear){
+      const pu = pendingUnclear;
+      if(p.status === 'ok'){
+        clearTimeout(pu.timer); pendingUnclear = null;
+        if(last) last.rescued = true;
+        lastCall = (p.kind === 'query' || p.kind === 'confirm' || p.kind === 'cancel' || p.kind === 'repeat') ? { sig:p.id } : { sig:p.id, tool:p.tool, args:p.args };
+        lastLang = 'es';
+        runParsed(p);
+        return;
+      }
+      if(p.status === 'incomplete'){ clearTimeout(pu.timer); pu.missing = p.missing; pu.lang = 'es'; pu.ask(); }
+      return;
+    }
     if(p.status !== 'ok' || !lastCall) return;
-    const same = lastCall.sig === p.id || lastCall.sig === (p.kind === 'query' ? Object.keys(QUERY).find(k => QUERY[k].id === p.id) : null) ||
-                 (lastCall.tool === p.tool && JSON.stringify(lastCall.args) === JSON.stringify(p.args));
+    const same = lastCall.sig === p.id || (lastCall.tool === p.tool && JSON.stringify(lastCall.args) === JSON.stringify(p.args));
+    // Confusión típica del modelo: "estribor 10" (timón) tomado por un cambio de rumbo, o al revés. La gramática exacta es la autoridad:
+    // la orden más reciente sustituye a la anterior (el timón reemplaza el rumbo; "cae" parte del rumbo actual si había un timón puesto).
+    const PAIR = { helm_order:'alter_course', alter_course:'helm_order' };
+    if(!same && !p.loose && lastCall.tool && PAIR[lastCall.tool] === p.tool){
+      lastCall = { sig:p.id, tool:p.tool, args:p.args };
+      caption('err', 'Corrijo: «' + text + '»', true);
+      runParsed(p);
+      return;
+    }
     if(!same){
       if(window.ASDAudio) ASDAudio.play('alarmSoft');
       caption('err', `Revise: oí «${text}» pero ejecuté otra orden`, true);
@@ -321,10 +375,24 @@
     if(!g){ say('Voz no disponible.', 'es'); return; }
     const p = g.parse(text);
     caption('user', 'Oí: «' + text + '»', true);
-    if(p.status !== 'ok'){ if(window.ASDAudio) ASDAudio.play('alarmSoft'); say(g.speak(p).text, p.lang || lastLang); return; }
+    if(p.status !== 'ok'){ if(window.ASDAudio) ASDAudio.play('alarmSoft'); say(g.speak(Object.assign({}, p, { lang:'es' })).text, 'es'); return; }
     lastCall = null;
     runParsed(p);
   }
+
+  /* ---------- Turnos sin estado: cada orden parte del mismo prefijo (instrucciones + herramientas) ---------- */
+  function trackItem(item){
+    if(!item || !item.id) return;
+    if(item.type === 'function_call' || item.type === 'function_call_output'){ callItems.add(item.id); return; }
+    if(item.type === 'message' && item.role === 'user' && !audioItems.has(item.id))
+      audioItems.set(item.id, setTimeout(() => dropItem(item.id), 6000));       // si la transcripción nunca llega, se borra igualmente
+  }
+  function dropItem(id){
+    if(!id) return;
+    if(audioItems.has(id)){ clearTimeout(audioItems.get(id)); audioItems.delete(id); }
+    send({ type:'conversation.item.delete', item_id:id });
+  }
+  function flushCallItems(){ callItems.forEach(id => send({ type:'conversation.item.delete', item_id:id })); callItems.clear(); }
 
   /* ---------- Eventos del servidor ---------- */
   function onEvent(ev){
@@ -334,7 +402,9 @@
         break;
       case 'input_audio_buffer.speech_stopped':
         if(handsFree){ heardStart = performance.now(); setState('thinking'); }
+        speechEndAt = performance.now();
         break;
+      case 'conversation.item.added': case 'conversation.item.created': trackItem(ev.item); break;
       case 'response.function_call_arguments.done':      // primer momento en que la orden está completa
         onToolCall(ev.name, ev.arguments, ev.call_id);
         break;
@@ -343,6 +413,7 @@
         break;
       case 'conversation.item.input_audio_transcription.completed':
         onTranscript(ev.transcript);
+        dropItem(ev.item_id);
         break;
       case 'response.created':
         if(!assistantBusy && state !== 'listening') setState('thinking');
@@ -352,6 +423,7 @@
       case 'output_audio_buffer.stopped':
         assistantBusy = false; clearTimeout(busyTimer); if(state === 'speaking' || state === 'thinking') setState('ready'); break;
       case 'response.done':
+        flushCallItems();
         clearTimeout(busyTimer);
         busyTimer = setTimeout(() => { if(!natural() || !assistantBusy){ assistantBusy = false; if(state === 'speaking' || state === 'thinking') setState('ready'); } }, 400);
         break;
@@ -399,7 +471,8 @@
     handsFree = !!on;
     if(micTrack) micTrack.enabled = handsFree;
     if(dc && dc.readyState === 'open'){
-      send({ type:'session.update', session:{ type:'realtime', audio:{ input:{ turn_detection: handsFree ? VAD() : null } } } });
+      refreshSession();
+      send({ type:'session.update', session:{ type:'realtime', instructions, tools: sessionTools, audio:{ input:{ turn_detection: handsFree ? VAD() : null } } } });
     }
     if(handsFree && !pc) connect();
   }
@@ -424,12 +497,12 @@
 
   function isLive(){ return !!dc && dc.readyState === 'open' && state !== 'off' && state !== 'error' && state !== 'connecting'; }
 
-  /* announce: frases fijas que la app dice sin que se las pidan (SOLO alarmas críticas y "rumbo alcanzado").
-     Nunca interrumpen al práctico: si habla o espera respuesta, se encolan. Solo una alarma crítica corta a Marina si es ELLA quien habla. */
+  /* announce: habla una frase fija sin interrumpir al práctico (si habla o espera respuesta, se encola). Ya no hay avisos espontáneos:
+     solo lo usa hablar() para lo que el práctico pidió con un botón. */
   function announce(text, opt){
     opt = opt || {};
-    const lang = opt.lang || lastLang;
-    const phrase = (text && typeof text === 'object') ? (text[lang] || text.es) : text;
+    const lang = 'es';
+    const phrase = (text && typeof text === 'object') ? (text.es || text.en) : text;
     if(!phrase) return;
     const key = opt.key || String(phrase).slice(0, 24);
     const now = Date.now();
@@ -446,11 +519,10 @@
     say(v.text, v.lang);
   }
 
-  /* hablar() existente (alarmas de varada y UKC crítico; lectura del asesor IA que el práctico pide con el botón) */
+  /* hablar(): solo lo que el práctico pide con un botón (lectura del asesor IA). Las alarmas ya no hablan. */
   window.hablar = function(texto, opt){
     if(!texto) return;
-    const critical = /cr[ií]tica|encallado|poco profundas/i.test(texto);
-    announce(texto, Object.assign({ key:'hablar:' + texto.slice(0, 18), prio: critical ? 'critical' : 'normal', lang:'es' }, opt || {}));
+    announce(texto, Object.assign({ key:'hablar:' + texto.slice(0, 18), lang:'es' }, opt || {}));
   };
 
   /* ---------- Cableado de la interfaz ---------- */
@@ -472,6 +544,13 @@
     window.addEventListener('keyup', e => { if(e.code === 'KeyV') pttEnd(); });
     window.addEventListener('blur', pttEnd);
 
+    if(mic){   // precalentado: abre la llamada al acercarse al botón (solo si el micrófono ya está permitido: sin avisos por sorpresa)
+      const warm = () => {
+        if(pc || state !== 'off' || (!currentUserKey() && !cfg.tokenEndpoint && !hasDefaultKey()) || !navigator.permissions || !navigator.permissions.query) return;
+        navigator.permissions.query({ name:'microphone' }).then(r => { if(r.state === 'granted' && !pc && state === 'off') connect(); }).catch(() => {});
+      };
+      mic.addEventListener('pointerenter', warm); mic.addEventListener('focus', warm);
+    }
     const hf = byId('handsFree'); if(hf) hf.addEventListener('change', () => setHandsFree(hf.checked));
     const off = byId('voiceOff'); if(off) off.addEventListener('click', disconnect);
 
@@ -503,7 +582,51 @@
     setState('off');
   }
 
+  /* ---------- Evaluador de frases (desarrollo): ASDVoice.evalPhrases() en la consola ----------
+     Envía cada frase como TEXTO a la sesión abierta y compara la herramienta que llama el modelo con la que resuelve la gramática local.
+     No ejecuta nada en el simulador. Mide obediencia al prompt y latencia del modelo (no el reconocimiento de audio). */
+  const EVAL_NEGATIVES = [
+    { text:'¿Qué hora es?', expect:['ignore'] }, { text:'Esto está difícil hoy', expect:['ignore'] }, { text:'Hola, ¿me escuchas?', expect:['ignore'] },
+    { text:'¿Tú qué opinas del viento?', expect:['ignore', 'unclear'] }, { text:'Rumbo treinta', expect:['unclear'] }, { text:'Cae a babor', expect:['unclear', 'ignore'] }
+  ];
+  function evalExpectation(p){
+    if(p.status === 'ok') return null;
+    return p.status === 'no_match' ? ['ignore', 'unclear'] : ['unclear'];
+  }
+  async function evalPhrases(list){
+    const g = await loadGrammar(); if(!g) throw new Error('Base de órdenes no cargada');
+    if(!isLive()){
+      connect();
+      await new Promise((ok, no) => { const t0 = Date.now(), iv = setInterval(() => { if(isLive()){ clearInterval(iv); ok(); } else if(Date.now() - t0 > 15000){ clearInterval(iv); no(new Error('Sin conexión de voz')); } }, 100); });
+    }
+    const base = [];
+    dbRef.commands.forEach(c => ['es', 'en'].forEach(l => (c.examples[l] || []).forEach(t => base.push({ text:t }))));
+    const items = (list && list.length ? list : base.concat(EVAL_NEGATIVES)).map(x => typeof x === 'string' ? { text:x } : x);
+    const rows = [];
+    for(const it of items){
+      const p = g.parse(it.text), expect = it.expect || evalExpectation(p);
+      const got = await new Promise(resolve => {
+        const to = setTimeout(() => { evalWait = null; resolve({ name:'(sin respuesta)', args:{}, ms:null }); }, 10000);
+        const w = r => { clearTimeout(to); resolve(r); }; w.t0 = performance.now(); evalWait = w;
+        send({ type:'conversation.item.create', item:{ type:'message', role:'user', content:[{ type:'input_text', text:it.text }] } });
+        send({ type:'response.create' });
+      });
+      let ok;
+      if(expect) ok = expect.indexOf(got.name) >= 0;
+      else if(got.name === 'report') ok = !!(VP.REPORTS[got.args.topic] && VP.REPORTS[got.args.topic].id === p.id);
+      else if(p.kind === 'confirm' || p.kind === 'cancel' || p.kind === 'repeat') ok = got.name === p.kind;
+      else { const clean = Object.assign({}, got.args); delete clean.lang; delete clean.wake; const q = g.fromTool(got.name, clean); ok = !!(q && q.id === p.id); }
+      rows.push({ frase: it.text, esperada: expect ? expect.join('|') : p.id, llamada: got.name + (got.args && got.args.topic ? ':' + got.args.topic : ''), ok, ms: got.ms });
+      await new Promise(r => setTimeout(r, 150));         // deja que response.done borre los ítems del turno
+    }
+    const ms = rows.map(r => r.ms).filter(v => v != null).sort((a, b) => a - b);
+    const summary = { total: rows.length, aciertos: rows.filter(r => r.ok).length, mediana_ms: ms.length ? ms[ms.length >> 1] : null, p95_ms: ms.length ? ms[Math.floor(ms.length * 0.95)] : null, modelo: cfg.model };
+    console.table(rows.filter(r => !r.ok)); console.log('Evaluación de voz', summary);
+    return { rows, summary };
+  }
+
   window.ASDVoice = { connect, disconnect, isLive, announce, sendText, setHandsFree, pending: () => tools ? tools.getPending() : null, refreshConfirm: refreshConfirmBar,
-                      _toolCall: onToolCall, get state(){ return state; }, get tools(){ return sessionTools; }, get instructions(){ return instructions; } };
+                      evalPhrases, log: voiceLog, apiKey: effectiveKey,
+                      _toolCall: onToolCall, _event: onEvent, get state(){ return state; }, get tools(){ return sessionTools; }, get instructions(){ return instructions; } };
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireUi); else wireUi();
 })();

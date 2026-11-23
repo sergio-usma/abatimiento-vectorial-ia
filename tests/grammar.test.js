@@ -106,14 +106,37 @@ test('consultas: solo las pedidas, y se componen con datos reales', () => {
   assert.equal(g.parse('Recomendación').id, 'q_recommend');
   assert.equal(g.parse('Informa el estado').tool, 'get_status');
   const drift = { status: 'ok', bow: { transverse_speed_kn: 0.4, side: 'estribor' }, stern: { transverse_speed_kn: 0.0, side: 'sin caída' } };
-  assert.equal(g.speak(g.parse('informe de deriva'), drift).text, 'Proa 0.4 nudos a estribor, popa quieta.');
+  assert.equal(g.speak(g.parse('informe de caída'), drift).text, 'Proa 0.4 nudos a estribor, popa quieta.');
   assert.equal(g.speak(g.parse('how is the bow falling'), drift).text, 'Bow 0.4 knots to starboard, stern still.');
   const rec = { status: 'ok', suggestion: { type: 'alter', side: 'port', degrees: 5 } };
   assert.equal(g.speak(g.parse('recomendación'), rec).text, 'Sugiero caer 5 grados a babor.');
-  assert.equal(g.speak(g.parse('recomendación'), { status: 'ok', suggestion: null }).text, 'Sin caída significativa.');
+  assert.equal(g.speak(g.parse('recomendación'), { status: 'ok', suggestion: null }).text, 'Sin caída significativa. Sin sugerencias.');
   const st = { status: 'ok', heading_spoken: { es: 'tres cero cero', en: 'three zero zero' }, ordered_heading_spoken: { es: 'cero nueve cero', en: 'zero nine zero' }, nav: { sog_kn: 4.2 }, engine_order: 'Slow ahead', alerts: [] };
   assert.equal(g.speak(g.parse('¿cuál es el rumbo?'), st).text, 'Rumbo tres cero cero, ordenado cero nueve cero.');
   assert.match(g.speak(g.parse('informa el estado'), st).text, /Poca avante/);
+});
+
+test('informes nuevos: meteo, derrota, abatimiento, profundidad, velocidad y sugerencia de derrota', () => {
+  const ids = { 'informe meteorológico': 'q_weather', 'weather report': 'q_weather', 'informe de derrota': 'q_track', 'cross track': 'q_track',
+                'informe de abatimiento': 'q_leeway', 'informe de deriva': 'q_leeway', 'report leeway': 'q_leeway', 'informe de profundidad': 'q_depth',
+                'informe de velocidad': 'q_speed', '¿qué velocidad llevamos?': 'q_speed', 'informe completo': 'q_full', 'full report': 'q_full' };
+  Object.keys(ids).forEach(t => assert.equal(g.parse(t).id, ids[t], t));
+  const env = { wind_from_deg: 90, wind_kn: 20, wind_rel_deg: 60, wind_rel_side: 'estribor', current_toward_deg: 180, current_kn: 1.5, hs_m: 1, tide_m: 0.5 };
+  assert.equal(g.speak(g.parse('informe meteorológico'), { status: 'ok', environment: env }).text,
+    'Viento por el cero nueve cero, 20 nudos, por la amura de estribor. Corriente hacia el uno ocho cero, 1.5 nudos. Mar 1 metros. Marea 0.5 metros.');
+  assert.match(g.speak(g.parse('weather report'), { status: 'ok', environment: env }).text, /^Wind from zero nine zero, 20 knots, on the starboard bow\./);
+  const route = { waypoint: '2 de 4', distance_nm: 1.2, cross_track_m: 45, cross_track_side: 'estribor', eta_min: 9 };
+  const tr = { status: 'ok', route, bearing_to_waypoint_spoken: { es: 'cero nueve cero', en: 'zero nine zero' }, cts_spoken: { es: 'cero ocho cinco', en: 'zero eight five' } };
+  assert.equal(g.speak(g.parse('informe de derrota'), tr).text, 'Punto 2 de 4, 1.2 millas, demora cero nueve cero, rumbo a gobernar cero ocho cinco. Fuera de la derrota 45 metros a estribor. Llegada en 9 minutos.');
+  assert.equal(g.speak(g.parse('informe de derrota'), { status: 'ok', route: 'sin derrota' }).text, 'Sin derrota guiada.');
+  assert.equal(g.speak(g.parse('recomendación'), Object.assign({ suggestion: null }, tr)).text, 'Desvío de 45 metros a estribor: sugiero caer 10 grados a babor hacia la derrota.');
+  assert.equal(g.speak(g.parse('recomendación'), { status: 'ok', suggestion: null, route: Object.assign({}, route, { cross_track_m: 5 }) }).text, 'Sin caída significativa. Sin sugerencias.');
+  const lw = { status: 'ok', leeway_deg: 3.2, leeway_side: 'estribor', drift_deg: 4.1, drift_side: 'sin caída', sog_kn: 5 };
+  assert.equal(g.speak(g.parse('informe de abatimiento'), lw).text, 'Abatimiento 3.2 grados a estribor. Deriva 4.1 grados. 5 nudos sobre el fondo.');
+  const nav = { stw_kn: 5, sog_kn: 5.5, depth_m: 12, ukc_m: 1.2 };
+  assert.equal(g.speak(g.parse('informe de profundidad'), { status: 'ok', nav, environment: { tide_m: 0 } }).text, 'Profundidad 12 metros. UKC 1.2 metros. UKC crítico.');
+  assert.match(g.speak(g.parse('speed report'), { status: 'ok', nav, engine_order: 'Slow ahead', thrust_pct: { port: 30, stbd: 30 }, rate_of_turn_deg_s: 0 }).text, /^5 knots through water, 5\.5 over ground\. Slow ahead\. Thrust 30 and 30 percent\.$/);
+  assert.equal(g.speak(g.parse('informe de profundidad'), { status: 'ok', nav: 'sin datos' }).text, 'Aún no hay datos.');
 });
 
 test('lo que Marina repite: frase fija y breve, rumbos por dígito, en el idioma de la orden', () => {

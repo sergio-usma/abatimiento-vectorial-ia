@@ -209,6 +209,7 @@
   #bridgeFeed[hidden]{display:none;}
   #bridgeFeed.enter{animation:feedIn .22s var(--ease);}
   @keyframes feedIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  #bridgeFeed[data-mode="side"]{height:var(--dock-h,auto);max-height:none;}
   #bridgeFeed[data-mode="top"]{top:var(--feed-top,96px);left:12px;right:12px;bottom:auto;width:auto;}
   .feed-sec{display:flex;flex-direction:column;gap:5px;padding:9px 11px;}
   .feed-sec[hidden]{display:none;}
@@ -278,7 +279,7 @@
 
   /* Fuerzas */
   /* Columna arriba a la izquierda: diagrama de fuerzas y, debajo, la lista de valores de los vectores. */
-  #forceStack{position:absolute;top:12px;left:12px;width:196px;z-index:640;display:flex;flex-direction:column;gap:8px;max-height:var(--fd-max,none);pointer-events:none;}
+  #forceStack{position:absolute;top:12px;left:12px;width:var(--stack-w,220px);z-index:640;display:flex;flex-direction:column;gap:8px;max-height:var(--fd-max,none);pointer-events:none;}
   #forceStack>.float{position:relative;z-index:auto;pointer-events:auto;width:100%;}
   #forceStack>[hidden],#forceDiagram.tiny{display:none;}
   #forceStack:not(:has(>:not([hidden]))){display:none;}
@@ -287,16 +288,17 @@
   #forceDiagram .fd-body{overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;}
   .fd-title{display:flex;align-items:center;min-height:30px;padding:0 12px;font:800 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);}
   .fd-body{padding:0 10px 10px;}
-  #forceDiagramCanvas{display:block;width:174px;height:150px;margin:0 auto 6px;}
-  #forceDiagram.small #forceDiagramCanvas{width:136px;height:117px;margin-bottom:4px;}
-  .fd-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:3px 9px;margin-bottom:4px;font-size:12px;color:var(--text-2);}
+  #forceDiagramCanvas{display:block;width:100%;aspect-ratio:200/176;height:auto;margin:0 auto 6px;}
+  #forceDiagram.small #forceDiagramCanvas{width:84%;margin-bottom:4px;}
+  .fd-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:3px 8px;margin-bottom:4px;font-size:12px;color:var(--text-2);}
   .fd-legend span{display:flex;align-items:center;gap:4px;}
   .fd-legend .sw{display:inline-block;width:10px;height:3px;border-radius:2px;}
   .fd-legend .sw.dash{height:0;background:none;border-top:2px dashed var(--v-thrust);border-radius:0;}
   .fd-scale{margin-bottom:5px;font:500 11px var(--mono);color:var(--text-3);text-align:center;}
   .fd-readout .row{padding:4px 2px;background:transparent;border-bottom:1px solid var(--line);}
   .fd-readout .row>span:first-child{font-size:11px;}
-  .fd-readout .row>span:last-child{font-size:12px;}
+  .fd-readout .row>span:last-child{font-size:12px;min-width:0;overflow-wrap:anywhere;text-align:right;}
+  .fd-readout .row{gap:6px;}
   .fd-readout .net>span:last-child{color:var(--warn);}
   .fd-readout .row.stbd>span:last-child{color:var(--stbd);} .fd-readout .row.port>span:last-child{color:var(--port);}
   .fd-note{margin-top:6px;font-size:12px;line-height:1.4;color:var(--text-3);}
@@ -396,8 +398,8 @@
   #northArrow .na-tail{fill:var(--text-3);opacity:.55;}
   #northArrow .na-n{fill:var(--accent);font:800 11px var(--mono);}
   /* Barra de herramientas de la carta: zoom, seguir, vista general y diagrama de fuerzas. */
-  #mapTools{right:12px;bottom:calc(var(--lift-r,0px) + 12px);z-index:700;display:flex;flex-direction:column;width:38px;overflow:hidden;border-radius:var(--r2);}
-  .tool{display:grid;place-items:center;flex:none;width:36px;height:36px;padding:0;border:0;background:transparent;color:var(--text-2);cursor:pointer;transition:background .15s,color .15s;}
+  #mapTools{right:12px;bottom:calc(var(--lift-r,0px) + 12px);height:var(--dock-h,auto);z-index:700;display:flex;flex-direction:column;width:38px;overflow:hidden;border-radius:var(--r2);}
+  .tool{display:grid;place-items:center;flex:1 1 0;min-height:0;width:36px;height:auto;padding:0;border:0;background:transparent;color:var(--text-2);cursor:pointer;transition:background .15s,color .15s;}
   .tool:hover:not(:disabled){background:var(--s3);color:var(--text);}
   .tool:disabled{opacity:.4;cursor:default;}
   .tool[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft);}
@@ -604,7 +606,7 @@
     <details class="group" id="grpVoz">
       <summary><h3>Voz e IA</h3></summary>
       <div class="group-body">
-        <label class="field"><span class="lbl">Clave de OpenAI (solo esta pestaña)</span><span class="inp"><input type="password" id="openaiKey" placeholder="sk-…" autocomplete="off" spellcheck="false"></span></label>
+        <label class="field"><span class="lbl">Clave de OpenAI (solo esta pestaña; vacío = clave por defecto)</span><span class="inp"><input type="password" id="openaiKey" placeholder="sk-… (opcional)" autocomplete="off" spellcheck="false"></span></label>
         <label class="check"><input type="checkbox" id="handsFree"><span>Manos libres (di "Marina…")</span></label>
         <label class="check"><input type="checkbox" id="voiceNatural"><span>Voz natural de OpenAI (más lenta)</span></label>
         <form id="cmdForm" class="actions2" autocomplete="off">
@@ -1427,7 +1429,8 @@ function calcularFuerzas(){
   const curE = amb.cKn*0.5144*Math.sin(cRad), curN = amb.cKn*0.5144*Math.cos(cRad);
 
   const vE = shipBody? shipBody.velocity.x : 0, vN = shipBody? shipBody.velocity.y : 0;
-  const relE = vE - curE, relN = vN - curN;
+  // La velocidad del casco (shipBody.velocity) es la velocidad A TRAVÉS DEL AGUA (STW): la corriente solo se suma para el movimiento sobre el fondo.
+  const relE = vE, relN = vN;
   const u = relE*bowE + relN*bowN;
   const w = relE*bowN - relN*bowE;
 
@@ -1458,23 +1461,24 @@ function calcularFuerzas(){
   //     la velocidad relativa u,w) + resistencia añadida por oleaje ---
   const Hs = amb.olaHs;
   const waveFactorSurge = 1 + 0.35*Hs*Hs;
-  const waveFactorSway  = 1 + 0.15*Hs*Hs;
   const Fu = -(ship.linSurge*u + ship.kSurge*waveFactorSurge*u*Math.abs(u));
-  const Fw = -(ship.linSway*w + ship.kSway*waveFactorSway*w*Math.abs(w));
+  // Resistencia lateral por franjas de proa y popa + sustentación del casco (js/forces.js): fija dónde queda el pivote al virar.
+  const hull = ASDForces.hullHydro(ship, u, w, estado.yawRate, Hs);
+  const Fw = hull.Fw, torqueHull = hull.N;
 
   // --- 4) Amortiguamiento de guiñada (siempre opone al giro, no es "ambiente") ---
-  const torqueDamp = -(ship.kYawLin*estado.yawRate + ship.kYawQuad*estado.yawRate*Math.abs(estado.yawRate));
+  const torqueDamp = ASDForces.yawDamp(ship, estado.yawRate);
 
   // --- Totales ---
   const totalFx = FxProp + windFx + Fu;
   const totalFy = FyProp + windFy + Fw;
-  const torqueTotal = torqueProp + torqueWind + torqueDamp;
+  const torqueTotal = torqueProp + torqueWind + torqueDamp + torqueHull;
 
   return {
     heading, bowE, bowN, u, w, curE, curN,
     xP, yP, xS, yS, FxP, FyP, FxS, FyS, torqueP, torqueS, torqueProp, FxProp, FyProp,
     windFx, windFy, torqueWind, fWindMag,
-    Fu, Fw, torqueDamp,
+    Fu, Fw, torqueDamp, torqueHull, hull,
     totalFx, totalFy, torqueTotal,
   };
 }
@@ -1486,22 +1490,20 @@ function calcularFuerzas(){
 function pasoFisico(dt){
   if(!shipBody) return;
   const F = calcularFuerzas();
-  const bowE = F.bowE, bowN = F.bowN;
 
-  // --- Masa efectiva anisótropa (viada, informe §8) ---
-  const aX = F.totalFx/ship.effMassSurge;
-  const aY = F.totalFy/ship.effMassSway;
-  const aE = aX*bowE + aY*bowN, aN = aX*bowN - aY*bowE;
-  const vE = shipBody.velocity.x, vN = shipBody.velocity.y;
-  const newVE = vE + aE*dt, newVN = vN + aN*dt;
-  Matter.Body.setVelocity(shipBody, {x:newVE, y:newVN});
+  // --- Dinámica en ejes del casco (ecuaciones de Kirchhoff, js/forces.js): masas añadidas anisótropas (viada, informe §8),
+  //     acoplo u·r / v·r y momento de Munk. El estado es (u, v, r) respecto al agua; la velocidad "mundo" se deriva con el rumbo nuevo. ---
+  const dyn = ASDForces.accel(ship, { u:F.u, v:F.w, r:estado.yawRate }, { X:F.totalFx, Y:F.totalFy, N:F.torqueTotal });
+  const u1 = F.u + dyn.du*dt, v1 = F.w + dyn.dv*dt;
 
   // N positivo (ejes propios x=proa,y=estribor) gira la proa hacia
   // estribor, que es exactamente el sentido en que crece el rumbo
   // compás (heading), así que se integra directamente sin signo extra.
-  const yawAccel = F.torqueTotal/ship.effIyaw;
-  estado.yawRate += yawAccel*dt;
+  estado.yawRate += dyn.dr*dt;
   estado.heading = estado.heading + estado.yawRate*dt;
+  const bowE = Math.sin(estado.heading), bowN = Math.cos(estado.heading);
+  const newVE = u1*bowE + v1*bowN, newVN = u1*bowN - v1*bowE;
+  Matter.Body.setVelocity(shipBody, {x:newVE, y:newVN});
 
   Matter.Body.translate(shipBody, {x:(newVE+F.curE)*dt, y:(newVN+F.curN)*dt});
   estado.tSim += dt;
@@ -1523,16 +1525,18 @@ function pasoFisico(dt){
 let fdScaleN = 20000, fdLatN = 3000;   // escalas suavizadas: ataque inmediato, decaimiento lento
 function dibujarDiagramaFuerzas(){
   /* Diagrama de fuerzas con TODAS las fuerzas que actúan sobre el buque, calculadas cada frame por calcularFuerzas():
-     dos chorros de agua (uno por propulsor, hacia donde sale el agua), su suma = empuje, viento, resistencia del agua
-     (corriente y oleaje incluidos) y la fuerza neta. Los cuatro triángulos son los vectores de velocidad transversal de
-     proa y popa sobre el fondo, en nudos (js/forces.js). No altera la física ni los controles. */
+     dos chorros de agua (uno por propulsor), su suma = empuje, viento, resistencia del agua (corriente y oleaje incluidos)
+     y la fuerza neta. Los triángulos laterales son la velocidad transversal de proa y popa sobre el fondo, en nudos.
+     Cada cifra va en una casilla blanca con letras del color de su vector. No altera la física ni los controles. */
   const canvas = document.getElementById('forceDiagramCanvas');
   if(!canvas || !ship) return;
   const ctx = canvas.getContext('2d');
-  const FD_W = 174, FD_H = 150, dpr = Math.min(3, window.devicePixelRatio || 1);
-  if(canvas.width !== Math.round(FD_W*dpr)){ canvas.width = Math.round(FD_W*dpr); canvas.height = Math.round(FD_H*dpr); }
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  const w = FD_W, h = FD_H;
+  const W0 = 200, H0 = 176;                                   // espacio lógico; el canvas se escala al ancho de la columna
+  const cssW = Math.max(120, canvas.clientWidth || W0), dpr = Math.min(3, window.devicePixelRatio || 1);
+  const k = cssW/W0, pxW = Math.round(cssW*dpr), pxH = Math.round(cssW*H0/W0*dpr);
+  if(canvas.width !== pxW || canvas.height !== pxH){ canvas.width = pxW; canvas.height = pxH; }
+  ctx.setTransform(dpr*k,0,0,dpr*k,0,0);
+  const w = W0, h = H0, fs = n => Math.max(n, 11/k);          // nunca menos de 11 px reales
   ctx.clearRect(0,0,w,h);
   const F = calcularFuerzas();
 
@@ -1546,35 +1550,68 @@ function dibujarDiagramaFuerzas(){
                                           azP:estado.azP, azS:estado.azS });
   estado.fuerzas = A;
 
-  // Una sola escala para empuje, correcciones y neta (la mayor mide 62 px). Los chorros usan su propia escala fija:
-  // su largo es el % de máquinas de cada propulsor (100 % = 44 px), así 50 % y 70 % se ven distintos.
+  // Una sola escala para empuje, viento, agua y neta (la mayor mide 62 px). Los chorros usan su propia escala fija:
+  // su largo es el % de máquinas de cada propulsor (100 % = 46 px), así 50 % y 70 % se ven distintos.
   const comps = { thrust:[A.thrust.fx,A.thrust.fy], wind:[F.windFx,F.windFy], water:[F.Fu,F.Fw], net:[F.totalFx,F.totalFy] };
   const maxMag = Math.max(...Object.values(comps).map(v => Math.hypot(v[0],v[1])));
   fdScaleN = Math.max(maxMag, fdScaleN*0.985, 20000);
-  const s = 62/fdScaleN;                                      // px por N
-  const JET_PX = 44;                                          // largo del chorro al 100 %
+  const s = 66/fdScaleN;                                      // px por N
+  const JET_PX = 52;
+  const kN = v => (Math.abs(v)/1000).toFixed(Math.abs(v) >= 99500 ? 0 : 1);
 
-  const cx = w/2, cy = 76, pxm = 2.17;
+  // Tinta de las casillas blancas: versión oscurecida de cada color para leer con 4,5:1 sobre blanco.
+  const INK = { port:'#b3261e', starboard:'#14742f', wind:'#475569', current:'#1d4ed8', thrust:'#0b7a75' };
+  const cx = w/2, cy = 90, pxm = Math.min(3.5, 62/(ship.L/2), 30/(ship.B/2));   // casco lo más grande que cabe
   function localToCanvas(x,y){ return { px: cx + y*pxm, py: cy - x*pxm }; }
   function clampTip(x0,y0,x1,y1){
-    const m = 6, dx = x1-x0, dy = y1-y0; let t = 1;
+    const m = 8, dx = x1-x0, dy = y1-y0; let t = 1;
     if(dx>0) t = Math.min(t,(w-m-x0)/dx); else if(dx<0) t = Math.min(t,(m-x0)/dx);
     if(dy>0) t = Math.min(t,(h-m-y0)/dy); else if(dy<0) t = Math.min(t,(m-y0)/dy);
     t = Math.max(0,t);
     return [x0+dx*t, y0+dy*t];
   }
-  function arrow(x0,y0,x1,y1,color,width,dash){
+  // Flecha rellena: fuste con borde oscuro y cabeza triangular ancha; punteada (suma de empuje) o con plumas (viento).
+  function arrow(x0,y0,x1,y1,color,width,opt){
+    opt = opt || {};
     [x1,y1] = clampTip(x0,y0,x1,y1);
-    ctx.save();
-    ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=width;
-    if(dash) ctx.setLineDash(dash);
-    ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
-    ctx.setLineDash([]);
-    const ang=Math.atan2(y1-y0,x1-x0), hs = width > 3 ? 9 : 7;
-    ctx.beginPath(); ctx.moveTo(x1,y1);
-    ctx.lineTo(x1-hs*Math.cos(ang-0.4), y1-hs*Math.sin(ang-0.4));
-    ctx.lineTo(x1-hs*Math.cos(ang+0.4), y1-hs*Math.sin(ang+0.4));
-    ctx.closePath(); ctx.fill();
+    const dx = x1-x0, dy = y1-y0, len = Math.hypot(dx,dy); if(len < 2) return [x1,y1];
+    const ux = dx/len, uy = dy/len, nx = -uy, ny = ux;
+    const hl = Math.min(len*0.7, width*2.4+5), hw = width*1.35+2.2, bx = x1-ux*hl, by = y1-uy*hl;
+    ctx.save(); ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    if(opt.dash){
+      ctx.strokeStyle = color; ctx.lineWidth = width; ctx.setLineDash(opt.dash);
+      ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(bx,by); ctx.stroke(); ctx.setLineDash([]);
+      ctx.fillStyle = color; ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(bx+nx*hw, by+ny*hw); ctx.lineTo(bx-nx*hw, by-ny*hw); ctx.closePath(); ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(x0+nx*width/2, y0+ny*width/2); ctx.lineTo(bx+nx*width/2, by+ny*width/2);
+      ctx.lineTo(bx+nx*hw, by+ny*hw); ctx.lineTo(x1,y1); ctx.lineTo(bx-nx*hw, by-ny*hw);
+      ctx.lineTo(bx-nx*width/2, by-ny*width/2); ctx.lineTo(x0-nx*width/2, y0-ny*width/2); ctx.closePath();
+      ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = 'rgba(5,15,22,.75)'; ctx.lineWidth = 1; ctx.stroke();
+      if(opt.feather){                                        // plumas de viento: dos marcas cruzadas en el fuste
+        ctx.strokeStyle = color; ctx.lineWidth = 1.6;
+        for(const d of [0.28, 0.5]){
+          const fx = x0+ux*len*d, fy = y0+uy*len*d;
+          ctx.beginPath(); ctx.moveTo(fx+nx*width/2, fy+ny*width/2); ctx.lineTo(fx+nx*(width/2+5)-ux*5, fy+ny*(width/2+5)-uy*5); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(fx-nx*width/2, fy-ny*width/2); ctx.lineTo(fx-nx*(width/2+5)-ux*5, fy-ny*(width/2+5)-uy*5); ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+    return [x1,y1];
+  }
+  // Casilla blanca con letras de color: la lectura de cada vector. Se ancla a un punto y se mantiene dentro del lienzo.
+  const placed = [];
+  function chip(text, ax, ay, ink, edge, align){
+    ctx.save(); ctx.font = `700 ${fs(11)}px "DM Mono", monospace`; ctx.textBaseline = 'middle';
+    const tw = ctx.measureText(text).width, bw = tw + 9, bh = fs(11) + 6;
+    let x = align === 'left' ? ax : align === 'right' ? ax - bw : ax - bw/2, y = ay - bh/2;
+    x = Math.max(2, Math.min(w - bw - 2, x)); y = Math.max(2, Math.min(h - bh - 2, y));
+    for(let i=0;i<6 && placed.some(r => x < r.x+r.w+2 && x+bw+2 > r.x && y < r.y+r.h+2 && y+bh+2 > r.y); i++) y += (ay < cy ? -1 : 1)*(bh+2);
+    y = Math.max(2, Math.min(h - bh - 2, y)); placed.push({x,y,w:bw,h:bh});
+    ctx.fillStyle = '#f6f9fb'; ctx.strokeStyle = edge; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.roundRect(x,y,bw,bh,4); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = ink; ctx.textAlign = 'left'; ctx.fillText(text, x+4.5, y+bh/2+.5);
     ctx.restore();
   }
 
@@ -1582,85 +1619,114 @@ function dibujarDiagramaFuerzas(){
   const halfLen=(ship.L/2)*pxm, halfBeam=(ship.B/2)*pxm;
   ctx.beginPath();
   ctx.moveTo(cx, cy-halfLen);
-  ctx.lineTo(cx+halfBeam*0.9, cy-halfLen*0.32);
+  ctx.quadraticCurveTo(cx+halfBeam*1.05, cy-halfLen*0.55, cx+halfBeam*0.9, cy-halfLen*0.2);
   ctx.lineTo(cx+halfBeam*0.9, cy+halfLen*0.9);
   ctx.lineTo(cx-halfBeam*0.9, cy+halfLen*0.9);
-  ctx.lineTo(cx-halfBeam*0.9, cy-halfLen*0.32);
+  ctx.lineTo(cx-halfBeam*0.9, cy-halfLen*0.2);
+  ctx.quadraticCurveTo(cx-halfBeam*1.05, cy-halfLen*0.55, cx, cy-halfLen);
   ctx.closePath();
-  ctx.fillStyle='rgba(74,222,128,.07)'; ctx.fill();
-  ctx.strokeStyle='#3d6a8f'; ctx.lineWidth=1.3; ctx.stroke();
-  ctx.fillStyle=VCOL.hdg; ctx.font='bold 12px "DM Mono", monospace'; ctx.textAlign='right';
-  ctx.fillText('PROA', cx-9, cy-halfLen+4);
+  ctx.fillStyle='rgba(74,222,128,.09)'; ctx.fill();
+  ctx.strokeStyle='#4a7ba3'; ctx.lineWidth=1.4; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,cy-halfLen*0.8); ctx.lineTo(cx,cy+halfLen*0.8);          // crujía
+  ctx.strokeStyle='rgba(122,160,190,.22)'; ctx.lineWidth=1; ctx.setLineDash([2,3]); ctx.stroke(); ctx.setLineDash([]);
+  ctx.fillStyle=VCOL.hdg; ctx.font=`bold ${fs(11)}px "DM Mono", monospace`; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  ctx.fillText('PROA', cx, Math.max(fs(11), cy-halfLen-5));
+  { const py = Math.max(fs(11), cy-halfLen-5), pw = 38, ph = fs(11)+4; placed.push({ x:cx-pw/2, y:py-ph+2, w:pw, h:ph }); }   // las casillas no tapan la rotulación de proa
 
   const cg = localToCanvas(0,0);
   const tip = v => ({ x: cg.px + v[1]*s, y: cg.py - v[0]*s });
+  const mag = v => Math.hypot(v[0],v[1]);
 
-  // --- Polígono de correcciones: empuje (suma de los dos propulsores) + viento + agua (corriente y oleaje) = fuerza neta ---
-  if(Math.hypot(...comps.net) > 1 || A.thrust.mag > 1){
-    let px0 = cg.px, py0 = cg.py;
+  // --- Polígono de correcciones: empuje + viento + agua = fuerza neta ---
+  if(mag(comps.net) > 1 || A.thrust.mag > 1){
     ctx.save(); ctx.setLineDash([2,3]); ctx.strokeStyle='rgba(226,232,240,.32)'; ctx.lineWidth=1;
-    ctx.beginPath(); ctx.moveTo(px0,py0);
+    ctx.beginPath(); ctx.moveTo(cg.px,cg.py);
     A.chain.steps.forEach(st => { ctx.lineTo(cg.px + st.y*s, cg.py - st.x*s); });
     ctx.stroke(); ctx.restore();
   }
-  if(Math.hypot(...comps.water) > 1) arrow(cg.px,cg.py, tip(comps.water).x, tip(comps.water).y, VCOL.current, 2.4);
-  if(Math.hypot(...comps.wind) > 1)  arrow(cg.px,cg.py, tip(comps.wind).x,  tip(comps.wind).y,  VCOL.wind, 2.4);
-  if(A.thrust.mag > 1)               arrow(cg.px,cg.py, tip(comps.thrust).x, tip(comps.thrust).y, VCOL.thrust, 2, [4,3]);
-  if(Math.hypot(...comps.net) > 1)   arrow(cg.px,cg.py, tip(comps.net).x,   tip(comps.net).y,   VCOL.thrust, 3.8);
+  const tags = [];
+  const force = (key, label, col, ink, width, opt) => {
+    if(mag(comps[key]) <= 1) return;
+    const t = tip(comps[key]), e = arrow(cg.px,cg.py, t.x, t.y, col, width, opt);
+    tags.push({ text: `${label} ${kN(mag(comps[key]))}`, x:e[0], y:e[1], ink, col });
+  };
+  force('water','A', VCOL.current, INK.current, 3);
+  force('wind','V', VCOL.wind, INK.wind, 3.4, { feather:true });
+  if(A.thrust.mag > 1) arrow(cg.px,cg.py, tip(comps.thrust).x, tip(comps.thrust).y, VCOL.thrust, 2, { dash:[4,3] });
+  force('net','N', VCOL.thrust, INK.thrust, 4.6);
+  // centro de gravedad
+  ctx.fillStyle='#0c1c27'; ctx.strokeStyle='#e2e8f0'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.arc(cg.px,cg.py,3.2,0,Math.PI*2); ctx.fill(); ctx.stroke();
 
   // --- Chorros de agua: uno por propulsor, en su posición real (popa, cada banda), hacia donde sale el agua (azimut + 180°) ---
-  ['port','starboard'].forEach(k => {
-    const j = A.jets[k], col = k === 'port' ? VCOL.port : VCOL.starboard;
+  ['port','starboard'].forEach(side => {
+    const j = A.jets[side], col = side === 'port' ? VCOL.port : VCOL.starboard;
     const o0 = localToCanvas(j.x, j.y);
-    ctx.fillStyle='#7f9cb3'; ctx.beginPath(); ctx.arc(o0.px,o0.py,2.8,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle='#0c1c27'; ctx.strokeStyle=col; ctx.lineWidth=1.6; ctx.beginPath(); ctx.arc(o0.px,o0.py,3.4,0,Math.PI*2); ctx.fill(); ctx.stroke();
     if(j.pct < 1) return;
     const L = JET_PX * j.pct/100, rad = j.jetDeg*D2R;
     // jetDeg se mide como el azimut: 0 = proa, 90 = estribor
-    arrow(o0.px, o0.py, o0.px + L*Math.sin(rad), o0.py - L*Math.cos(rad), col, 2.6);
+    const e = arrow(o0.px, o0.py, o0.px + L*Math.sin(rad), o0.py - L*Math.cos(rad), col, 3);
+    tags.push({ text: `${Math.round(j.pct)}%`, x:e[0], y:e[1], ink: side === 'port' ? INK.port : INK.starboard, col });
   });
 
-  // Arco de guiñada neta total
+  // Arco de guiñada neta total, con punta
   const frac = Math.min(1, Math.abs(F.torqueTotal)/(ship.maxTorque||1));
   if(frac>0.015){
-    const r=31, dirRight = F.torqueTotal>0;
-    ctx.strokeStyle = dirRight?VCOL.starboard:VCOL.port; ctx.globalAlpha = .75;
-    ctx.lineWidth = 2.2+frac*2.4;
-    ctx.beginPath();
-    if(dirRight) ctx.arc(cg.px,cg.py,r,-0.35,-0.35+0.25+frac*1.6,false);
-    else ctx.arc(cg.px,cg.py,r,Math.PI+0.35,Math.PI+0.35-0.25-frac*1.6,true);
-    ctx.stroke(); ctx.globalAlpha = 1;
+    const r=halfBeam+10, dirRight = F.torqueTotal>0, a0 = dirRight ? -0.35 : Math.PI+0.35, a1 = dirRight ? a0+0.25+frac*1.6 : a0-0.25-frac*1.6;
+    ctx.save();
+    ctx.strokeStyle = dirRight?VCOL.starboard:VCOL.port; ctx.fillStyle = ctx.strokeStyle; ctx.globalAlpha = .85;
+    ctx.lineWidth = 2.4+frac*2.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(cg.px,cg.py,r,a0,a1,!dirRight); ctx.stroke();
+    const ex = cg.px+r*Math.cos(a1), ey = cg.py+r*Math.sin(a1), tg = a1 + (dirRight ? Math.PI/2 : -Math.PI/2);
+    ctx.beginPath(); ctx.moveTo(ex+Math.cos(tg)*7, ey+Math.sin(tg)*7); ctx.lineTo(ex+Math.cos(tg+1.9)*6, ey+Math.sin(tg+1.9)*6); ctx.lineTo(ex+Math.cos(tg-1.9)*6, ey+Math.sin(tg-1.9)*6); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
 
-  // --- Vectores de velocidad transversal de proa y popa (Bow/Stern Transverse Speed Vectors) ---
-  // Cuatro triángulos: amura y aleta de estribor (verde, 90°) y de babor (rojo, 270°). Miden la velocidad lateral del extremo
-  // SOBRE EL FONDO (v ± r·L/2), en nudos: se rellena el del lado hacia el que se mueve ese extremo y su tamaño crece con la velocidad.
+  // --- Triángulos de velocidad transversal de proa y popa (Bow/Stern Transverse Speed Vectors) ---
+  // Cuatro triángulos: amura y aleta de estribor (verde) y de babor (rojo). Miden la velocidad lateral del extremo SOBRE EL FONDO
+  // (v ± r·L/2), en nudos: se rellena el del lado hacia el que se mueve ese extremo y su tamaño crece con la velocidad.
   const yBow = cy - halfLen*0.62, yStern = cy + halfLen*0.62;
-  const xStbd = cx + halfBeam*0.9 + 30, xPort = cx - halfBeam*0.9 - 30;
-  function tri(x, y, dir, color, kn, active, label){
-    const size = 3.5 + 4.5*Math.min(1, Math.abs(kn)/1.5);       // 3,5 a 8 px (mitad que antes)
-    ctx.save();
-    ctx.beginPath(); ctx.moveTo(x+dir*size*0.9,y); ctx.lineTo(x-dir*size*0.5,y-size*0.62); ctx.lineTo(x-dir*size*0.5,y+size*0.62); ctx.closePath();
-    ctx.lineWidth = 1.2; ctx.lineJoin = 'round'; ctx.strokeStyle = color; ctx.globalAlpha = active ? 1 : .4; ctx.stroke();
-    if(active){ ctx.fillStyle = color; ctx.globalAlpha = .6; ctx.fill(); }
+  const SLOT_W = 46, SLOT_H = 32, SLOT_M = 3;                                   // casillas fijas en las cuatro esquinas
+  const xStbd = Math.min(cx + halfBeam*0.9 + 20, w - SLOT_M - SLOT_W - 14), xPort = w - xStbd;
+  function tri(x, y, dir, color, ink, kn, active, label){
+    const size = 6 + 5*Math.min(1, Math.abs(kn)/1.5);          // 6 a 11 px
+    const hx = x+dir*size*0.95, tx = x-dir*size*0.55, hh = size*0.7;
+    ctx.save(); ctx.lineJoin = 'round';
+    // guía desde el casco: relaciona el triángulo con el extremo que mide
+    ctx.strokeStyle = color; ctx.globalAlpha = active ? .45 : .18; ctx.lineWidth = 1; ctx.setLineDash([2,3]);
+    ctx.beginPath(); ctx.moveTo(cx+dir*(halfBeam*0.9+2), y); ctx.lineTo(tx-dir*3, y); ctx.stroke(); ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(hx,y); ctx.lineTo(tx,y-hh); ctx.lineTo(tx,y+hh); ctx.closePath();
+    if(active){ ctx.globalAlpha = 1; ctx.fillStyle = color; ctx.fill(); ctx.strokeStyle = 'rgba(5,15,22,.7)'; ctx.lineWidth = 1; ctx.stroke(); }
+    else { ctx.globalAlpha = .4; ctx.lineWidth = 1.3; ctx.strokeStyle = color; ctx.stroke(); }
     ctx.restore();
-    if(label){
-      ctx.save(); ctx.font = 'bold 11px "DM Mono", monospace'; ctx.fillStyle = color; ctx.textBaseline = 'middle';
-      ctx.textAlign = dir > 0 ? 'left' : 'right';
-      ctx.fillText(label, x + dir*(size*0.9 + 4), y);
-      ctx.restore();
-    }
+  }
+  // Casilla fija de lectura: siempre en su esquina, con el valor en nudos en tiempo real. Apagada ("0.0") si ese extremo no va hacia su lado.
+  function slot(dir, y, color, ink, kn, active){
+    const x = dir > 0 ? w - SLOT_M - SLOT_W : SLOT_M, top = y - SLOT_H/2;
+    ctx.save();
+    ctx.fillStyle = '#f6f9fb'; ctx.globalAlpha = active ? 1 : .6;
+    ctx.beginPath(); ctx.roundRect(x, top, SLOT_W, SLOT_H, 5); ctx.fill();
+    ctx.globalAlpha = 1; ctx.strokeStyle = color; ctx.lineWidth = active ? 2 : 1; ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = active ? ink : '#64748b';
+    ctx.font = `700 ${fs(14)}px "DM Mono", monospace`; ctx.fillText(active ? Math.abs(kn).toFixed(1) : '0.0', x + SLOT_W/2, top + SLOT_H*0.4);
+    ctx.font = `600 ${fs(11)}px "DM Mono", monospace`; ctx.fillStyle = active ? ink : '#64748b'; ctx.fillText('kn', x + SLOT_W/2, top + SLOT_H*0.8);
+    ctx.restore();
   }
   function endTriangles(y, fall){
     const moving = fall.v !== 0, stbd = fall.v > 0, kn = Math.abs(fall.knots);
-    const lab = kn >= 0.05 ? kn.toFixed(1) : '';
-    tri(xStbd, y, +1, VCOL.starboard, kn, moving && stbd,  moving && stbd ? lab : '');
-    tri(xPort, y, -1, VCOL.port,      kn, moving && !stbd, moving && !stbd ? lab : '');
+    const aS = moving && stbd && kn >= 0.05, aP = moving && !stbd && kn >= 0.05;
+    tri(xStbd, y, +1, VCOL.starboard, INK.starboard, kn, aS);
+    tri(xPort, y, -1, VCOL.port,      INK.port,      kn, aP);
+    slot(+1, y, VCOL.starboard, INK.starboard, kn, aS);
+    slot(-1, y, VCOL.port,      INK.port,      kn, aP);
   }
   endTriangles(yBow,   A.fall.bow);
   endTriangles(yStern, A.fall.stern);
 
+  // --- Casillas de lectura: solo los cuatro indicadores de proa y popa (las fuerzas se leen en la lista) ---
+
   // --- Lecturas ---
-  const kN = v => (Math.abs(v)/1000).toFixed(Math.abs(v) >= 99500 ? 0 : 1);
   const arrowOf = v => v > 0 ? '→' : v < 0 ? '←' : '·';
   const set = (id, t) => { const e = document.getElementById(id); if(e && e.textContent !== t) e.textContent = t; };
   const n = A.net;
@@ -1991,18 +2057,25 @@ function ordenesLiberar(){
 function ordenesPaso(dtSim){
   const o = getOrdenes();
   if(!o || !o.isActive() || !shipBody || !ship) return;
-  const u = o.step({ ship, hdgDeg: norm360(estado.heading*R2D), yawRateRad: estado.yawRate, dt: dtSim });
+  // velocidad longitudinal sobre el agua con signo (kn): el lazo de velocidad de las órdenes la necesita
+  const surgeKn = (shipBody.velocity.x*Math.sin(estado.heading) + shipBody.velocity.y*Math.cos(estado.heading))/0.5144;
+  const u = o.step({ ship, hdgDeg: norm360(estado.heading*R2D), yawRateRad: estado.yawRate, dt: dtSim, surgeKn });
   if(!u) return;
-  const a = ASDOrders.allocate({ ship, Nd:u.Nd, T0:u.T0, phi:u.phi });
+  const a = ASDOrders.allocate({ ship, Nd:u.Nd, T0:u.T0, phi:u.phi, sides:u.sides });
   estado.azP = a.azP; estado.azS = a.azS;
   ctrlP.setAzimut(a.azP); ctrlS.setAzimut(a.azS);
   ctrlP.setThrottleVal(a.thrP); ctrlS.setThrottleVal(a.thrS);
   u.events.forEach(ev=>{
-    if(ev.type !== 'heading_achieved') return;
-    const h = ASDOrders.pad3(ev.heading);
+    // Orden cumplida: tono y, como respuesta a la orden del práctico, Marina lo dice en el idioma de la orden.
     if(window.ASDAudio) ASDAudio.play('ack');
-    const sp = ASDOrders.spokenHeading(ev.heading);
-    if(window.ASDVoice) ASDVoice.announce({ es:'Rumbo ' + sp.es + ', así.', en:'Steady on ' + sp.en + '.' }, { key:'hdg' });
+    if(!window.ASDVoice) return;
+    if(ev.type === 'heading_achieved'){
+      const sp = ASDOrders.spokenHeading(ev.heading);
+      ASDVoice.announce({ es:'Rumbo ' + sp.es + ' alcanzado.', en:'On course ' + sp.en + '.' }, { key:'hdg' });
+    } else if(ev.type === 'speed_achieved'){
+      const kn = Math.abs(Math.round(ev.knots*10)/10);
+      ASDVoice.announce({ es:'Velocidad ' + kn + ' nudos alcanzada.', en:'Speed ' + kn + ' knots reached.' }, { key:'spd' });
+    }
   });
 }
 
@@ -2414,12 +2487,10 @@ function verificarEncallamiento(ukc,prof){
   const warn = document.getElementById('shallowWarn');
   if(ukc<1.5 && ukc>=0 && !estado.alertaVoz){
     warn.style.display='flex';
-    hablar('Aguas poco profundas.');
     estado.alertaVoz=true;
   } else if(ukc>=1.5){ warn.style.display='none'; estado.alertaVoz=false; }
   if(ukc<0){
     pausarSim();
-    hablar('Alerta crítica. Buque encallado.');
     document.getElementById('crashInfo').innerHTML = `Profundidad ${prof.toFixed(1)} m · Calado ${ship.T} m<br>UKC ${ukc.toFixed(2)} m`;
     document.getElementById('crashModal').style.display='flex';
     document.getElementById('crashBtn').focus();
@@ -2439,7 +2510,7 @@ function hablar(texto){
   }
 }
 async function consultarAsesorIA(){
-  const apiKey = document.getElementById('openaiKey').value.trim();
+  const apiKey = document.getElementById('openaiKey').value.trim() || (window.ASDVoice && ASDVoice.apiKey ? await ASDVoice.apiKey() : '');
   const btn = document.getElementById('btnIA');
   const box = document.getElementById('iaResponse');
   const span = document.getElementById('iaText');
@@ -2715,7 +2786,7 @@ map.on('zoomend resize', updateNorthArrow);   // EPSG:3857 no gira: el norte sol
    - izquierda: radar + cursor (mismo ancho, --stack-w). Si junto a la consola no caben, suben por encima de ella.
    - derecha: barra de herramientas (zoom, seguir, vista general). Igual: si no cabe a un lado, sube sobre la consola.
    El radar cede ancho (190 -> 150 px) solo si hace falta para que quepa el diagrama de fuerzas encima. */
-const CORNER_MARGIN = 12, STACK_MAX = 190, STACK_MIN = 150, CURSOR_H = 50, GAP = 8, FD_TOP = 12, FD_NEED = 200, TOOLS_W = 38;
+const CORNER_MARGIN = 12, STACK_MAX = 220, STACK_MIN = 190, CURSOR_H = 50, GAP = 8, FD_TOP = 12, FD_NEED = 200, TOOLS_W = 38;
 const FD_FULL_H = 560, FD_COMPACT_H = 300, LIST_H = 150;   // alturas aproximadas del diagrama completo, compacto y de la lista
 function layoutCorner(){
   const mapEl = document.getElementById('map'), dock = document.getElementById('simDock');
@@ -2727,6 +2798,7 @@ function layoutCorner(){
   mapEl.style.setProperty('--lift',   raised  ? (dh + CORNER_MARGIN) + 'px' : '0px');
   mapEl.style.setProperty('--lift-r', raisedR ? (dh + CORNER_MARGIN) + 'px' : '0px');
   mapEl.dataset.stack = raised ? 'raised' : 'side';
+  mapEl.style.setProperty('--dock-h', dh + 'px');   // barra de herramientas y panel de puente igualan la altura de la consola
 
   const below = (raised ? dh + 2*CORNER_MARGIN : CORNER_MARGIN) + CURSOR_H + GAP;   // del borde inferior a la base del radar
   const room = H - below - FD_TOP - GAP - FD_NEED;
@@ -2753,7 +2825,7 @@ function layoutCorner(){
   // Sin lista visible, las cifras de los vectores vuelven al canvas en formato compacto: el dato nunca se pierde.
   window.__tagsMode = !VL.on || showList ? 'none' : 'compact';
   // La brújula se corre a la derecha lo justo para no pisar la pila de fuerzas (arriba a la izquierda).
-  const gc = document.getElementById('gameCompass'), stackR = (showFd || showList) ? 12 + 196 + 8 : 0;
+  const gc = document.getElementById('gameCompass'), stackR = (showFd || showList) ? 12 + d + 8 : 0;
   const cLeft = (W - gc.offsetWidth)/2;
   mapEl.style.setProperty('--compass-shift', Math.max(0, Math.round(stackR - cLeft)) + 'px');
   if(!OV.userSet) setOverviewCollapsed(W < 760, false);
@@ -2796,8 +2868,12 @@ initRosaZoom();
 <script src="js/config.js"></script>
 <script>if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) document.write('<script src="js/config.local.js"><\/script>');</script>
 <script src="js/orders.js"></script>
+<script src="js/intents.js"></script>
 <script src="js/grammar.js"></script>
+<script src="js/keybox.js"></script>
+<script src="js/default-key.js"></script>
 <script src="js/voice-tools.js"></script>
+<script src="js/voice-prompt.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/sim-api.js"></script>
 <script src="js/voice.js"></script>

@@ -7,7 +7,8 @@
  * y apunta tokenEndpoint a su URL. El Worker guarda la clave real y entrega claves efímeras.
  */
 window.ASD_CONFIG = {
-  model: 'gpt-realtime',          // alternativa más económica: 'gpt-realtime-mini'
+  model: 'gpt-realtime-1.5',      // el más rápido (sin razonamiento). Alternativa: 'gpt-realtime-2' + reasoning, o 'gpt-realtime-mini' (más barato)
+  reasoning: null,                // solo gpt-realtime-2: { effort: 'minimal' } (latencia mínima). Compara con ASDVoice.evalPhrases() en la consola
   voice: 'marin',                 // voz de mujer; respaldo: 'shimmer' o 'sage'
   transcriptionModel: 'gpt-4o-mini-transcribe',
   tokenEndpoint: null,            // p. ej. 'https://asd-realtime-token.TU-CUENTA.workers.dev'

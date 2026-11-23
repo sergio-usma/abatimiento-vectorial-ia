@@ -224,3 +224,31 @@ test('roles: una orden rechazada del asesor no descarta una confirmación pendie
   t.execute('engine_order', { order:'stop' }, { origin:'event' });
   assert.ok(t.getPending());
 });
+
+test('herramientas nuevas: velocidad, potencia, por motor, paso de telégrafo y acuse', () => {
+  const calls = [];
+  const sim = new Proxy({}, { get: (_, k) => (...a) => { calls.push([k, ...a]); return { status: 'ok', message: k }; } });
+  const t = VoiceTools.create(sim);
+  assert.equal(t.execute('speed_order', { knots: 6 }).status, 'ok');
+  t.execute('speed_order', { knots: 3, direction: 'astern' });
+  t.execute('speed_order', { delta_knots: -1 });
+  assert.equal(t.execute('speed_order', {}).status, 'error');
+  t.execute('power_percent', { percent: 50 }); t.execute('power_percent', { percent: 30, direction: 'astern' });
+  assert.equal(t.execute('power_percent', {}).status, 'error');
+  t.execute('engine_order', { order: 'slow_ahead', side: 'port' }); t.execute('engine_order', { order: 'stop' });
+  t.execute('engine_pair', { port: 'slow_ahead', starboard: 'slow_astern' });
+  assert.equal(t.execute('engine_pair', { port: 'slow_ahead' }).status, 'error');
+  t.execute('engine_step', { direction: 'down' });
+  assert.equal(t.execute('engine_step', { direction: 'sideways' }).status, 'error');
+  assert.equal(t.execute('standby', {}).status, 'ok');
+  assert.equal(t.execute('helm_order', { order: 'ease' }).status, 'error');
+  t.execute('helm_order', { order: 'ease', angle: 10 }); t.execute('helm_order', { order: 'nothing_port' });
+  const names = calls.map(c => c[0] + ':' + c.slice(1).join(','));
+  assert.deepEqual(names.slice(0, 3), ['speed:6', 'speed:-3', 'speedDelta:-1']);
+  assert.ok(names.includes('power:50,1') && names.includes('power:30,-1'));
+  assert.ok(names.includes('engine:slow_ahead,port') && names.includes('engine:stop,both'));
+  assert.ok(names.includes('engine:slow_astern,starboard') && names.includes('engineStep:down'));
+  assert.ok(names.includes('helm:ease,10') && names.includes('helm:nothing_port,'));
+  const ro = t.execute('speed_order', { knots: 5 }, { origin: 'event' });
+  assert.equal(ro.error, 'advisor_cannot_act');
+});

@@ -19,7 +19,8 @@
   const ENGINE_ORDERS = ['full_ahead','half_ahead','slow_ahead','dead_slow_ahead','stop','dead_slow_astern','slow_astern','half_astern','full_astern'];
   /* Herramientas de solo lectura: lo único que puede llamar el asesor (turnos disparados por un evento del sistema). */
   const READ_ONLY = ['get_status', 'drift_report'];
-  const HELM_ORDERS = ['port','starboard','hard_port','hard_starboard','midships','steady'];
+  const HELM_ORDERS = ['port','starboard','hard_port','hard_starboard','midships','steady','ease','nothing_port','nothing_starboard'];
+  const SIDES = ['both','port','starboard'];
 
   const POINT_PROP = { type:'string', enum:POINT_ENUM, description:'Punto cardinal (N, NE, E, SE, S, SW, W, NW y los intermedios NNE, ENE…). "Oeste" = W, "Este" = E.' };
 
@@ -28,14 +29,29 @@
       description:'Orden de rumbo: gobernar a un rumbo (HDG) en grados verdaderos 0-359. "Navega con rumbo 090", "Así, rumbo 000", "Steer course 090", "Steady on 270". Los rumbos se dicen con tres dígitos ("cero nueve cero" = 90).',
       parameters:{ type:'object', properties:{ degrees:{ type:'number', minimum:0, maximum:359 } }, required:['degrees'] } },
     { type:'function', name:'alter_course',
-      description:'Cambio de rumbo relativo, respecto al rumbo ordenado (o al actual si no hay orden). "Cae 5 grados a babor", "Caiga 10 a estribor", "Alter course 5 degrees to port". side: port = babor, starboard = estribor.',
+      description:'CAMBIO DE RUMBO de N grados (relativo al rumbo ordenado o al actual): la proa gira esos N grados y se queda en el rumbo nuevo. SOLO con un verbo de cambio de rumbo: "Cae 5 grados a babor", "Caiga 10 a estribor", "Cambia el rumbo 15 grados a estribor", "Alter course 5 degrees to port", "Come 10 degrees to starboard". NO la uses para "estribor 10" / "babor 15" / "starboard ten" / "diez a estribor" sin verbo: eso es helm_order (grados de TIMÓN, no de rumbo). side: port = babor, starboard = estribor.',
       parameters:{ type:'object', properties:{ side:{ type:'string', enum:['port','starboard'] }, degrees:{ type:'number', minimum:1, maximum:180 } }, required:['side','degrees'] } },
     { type:'function', name:'helm_order',
-      description:'Orden de timón estándar IMO: "Diez a babor" / "Port ten" (angle 10), "Veinte a estribor", "Todo a babor" / "Hard to port", "Timón a la vía" / "Midships", "Así" / "Steady" (mantener el rumbo actual). Para "Steady on 090" o "Así, rumbo 090" usa steer_course.',
+      description:'Orden de TIMÓN estándar IMO. El número son GRADOS DE TIMÓN (ángulo de la pala), NO grados de rumbo: "Estribor 10", "Babor 15", "Diez a estribor", "Starboard ten", "Meta diez a babor", "Caña a estribor 10" ponen el timón a ese ángulo y la proa CAE sin parar hacia esa banda hasta nueva orden (Así/Steady, Timón a la vía, otro ángulo de timón o un rumbo). Es lo contrario de alter_course. "Diez a babor" / "Port ten" (angle 10), "Veinte a estribor", "Todo a babor" / "Hard to port", "Timón a la vía" / "Midships" (midships: pala al centro, la proa puede seguir girando por inercia; NO fija rumbo), "Así" / "Steady" (steady: frena el giro y mantiene el rumbo al que llegó la proa). "Ease to ten" / "Menos caña, diez" = ease (angle 10: reduce el timón actual a ese ángulo), "Nothing to port" / "Nada a babor" = nothing_port, "Nothing to starboard" / "Nada a estribor" = nothing_starboard, "Meet her" = steady. Para "Steady on 090" o "Así, rumbo 090" usa steer_course.',
       parameters:{ type:'object', properties:{ order:{ type:'string', enum:HELM_ORDERS }, angle:{ type:'number', minimum:1, maximum:35, description:'Grados de timón (5, 10, 15, 20, 25, 30). Obligatorio con port/starboard.' } }, required:['order'] } },
     { type:'function', name:'engine_order',
-      description:'Telégrafo de máquinas: full_ahead (full avante, avante toda), half_ahead (media avante), slow_ahead (poca avante), dead_slow_ahead (muy poca avante), stop (para máquinas, stop engines), dead_slow_astern, slow_astern (poca atrás), half_astern (media atrás), full_astern (full atrás).',
-      parameters:{ type:'object', properties:{ order:{ type:'string', enum:ENGINE_ORDERS } }, required:['order'] } },
+      description:'Telégrafo de máquinas: full_ahead (full avante, avante toda), half_ahead (media avante), slow_ahead (poca avante), dead_slow_ahead (muy poca avante), stop (para máquinas, stop engines), dead_slow_astern, slow_astern (poca atrás), half_astern (media atrás), full_astern (full atrás). side: both (por defecto, "ambas máquinas"), port ("máquina de babor") o starboard ("máquina de estribor"). Para DOS motores con órdenes distintas usa engine_pair. "Emergency full ahead/astern" = full_ahead / full_astern. "Ciar" = astern.',
+      parameters:{ type:'object', properties:{ order:{ type:'string', enum:ENGINE_ORDERS }, side:{ type:'string', enum:SIDES } }, required:['order'] } },
+    { type:'function', name:'engine_pair',
+      description:'Órdenes distintas para cada motor en una sola frase: "Máquina de babor poca avante, estribor poca atrás", "Port engine slow ahead, starboard engine slow astern". port = orden del motor de babor, starboard = la del motor de estribor.',
+      parameters:{ type:'object', properties:{ port:{ type:'string', enum:ENGINE_ORDERS }, starboard:{ type:'string', enum:ENGINE_ORDERS } }, required:['port','starboard'] } },
+    { type:'function', name:'speed_order',
+      description:'Velocidad objetivo sobre el agua en nudos: "Mantén 6 nudos", "Maintain a speed of 6 knots", "Make 4 knots", "Reduce a 4 nudos" (knots = valor). "Aumenta la velocidad en 1 nudo" / "Increase speed by 1 knot" (delta_knots = 1; negativo si reduce). direction astern = atrás. Sin número, "reduce/aumenta velocidad" es engine_step.',
+      parameters:{ type:'object', properties:{ knots:{ type:'number', minimum:0, maximum:20 }, delta_knots:{ type:'number', minimum:-20, maximum:20 }, direction:{ type:'string', enum:['ahead','astern'] } } } },
+    { type:'function', name:'power_percent',
+      description:'Potencia de los propulsores en porcentaje del máximo, como en remolque: "Empuje cincuenta por ciento", "Push 50 percent", "Atrás 30 por ciento", "Power 25". direction ahead (por defecto) o astern.',
+      parameters:{ type:'object', properties:{ percent:{ type:'number', minimum:0, maximum:100 }, direction:{ type:'string', enum:['ahead','astern'] } }, required:['percent'] } },
+    { type:'function', name:'engine_step',
+      description:'Un punto del telégrafo más o menos, sin número: "Reduce velocidad", "Aumenta velocidad", "Un punto menos", "Reduce speed", "Increase speed", "Ease the engines".',
+      parameters:{ type:'object', properties:{ direction:{ type:'string', enum:['up','down'], description:'up = más potencia, down = menos.' } }, required:['direction'] } },
+    { type:'function', name:'standby',
+      description:'Acuse sin acción: "Stand by engines", "Atención máquinas", "Máquinas listas". No cambia nada; Marina responde "Máquinas listas".',
+      parameters:{ type:'object', properties:{} } },
     { type:'function', name:'all_stop',
       description:'Alto general: máquinas a stop. Conserva el rumbo ordenado.',
       parameters:{ type:'object', properties:{} } },
@@ -132,14 +148,35 @@
       },
       helm_order(a){
         if(!HELM_ORDERS.includes(a.order)) return fail('bad_args');
-        if((a.order === 'port' || a.order === 'starboard') && !isNum(a.angle)) return fail('bad_args', 'Indica los grados de timón (por ejemplo, diez a babor).');
+        if((a.order === 'port' || a.order === 'starboard' || a.order === 'ease') && !isNum(a.angle)) return fail('bad_args', 'Indica los grados de timón (por ejemplo, diez a babor).');
         return sim.helm(a.order, isNum(a.angle) ? clamp(a.angle, 1, 35) : null);
       },
       engine_order(a){
         if(!ENGINE_ORDERS.includes(a.order)) return fail('bad_args', 'Orden de máquinas desconocida.');
-        return sim.engine(a.order);
+        return sim.engine(a.order, SIDES.includes(a.side) ? a.side : 'both');
       },
       all_stop(){ return sim.allStop(); },
+    engine_pair(a){
+      if(!ENGINE_ORDERS.includes(a.port) || !ENGINE_ORDERS.includes(a.starboard)) return fail('bad_args', 'Indica la orden de cada motor.');
+      const p = sim.engine(a.port, 'port'); if(p && p.status === 'error') return p;
+      const r = sim.engine(a.starboard, 'starboard');
+      return r && r.status === 'ok' ? Object.assign(r, { message: 'Babor ' + a.port + ', estribor ' + a.starboard }) : r;
+    },
+    speed_order(a){
+      const dirn = a.direction === 'astern' ? -1 : 1;
+      if(isNum(a.knots)) return sim.speed(dirn * clamp(Math.abs(a.knots), 0, 20));
+      if(isNum(a.delta_knots)) return sim.speedDelta(a.delta_knots);
+      return fail('bad_args', 'Indica la velocidad en nudos.');
+    },
+    power_percent(a){
+      if(!isNum(a.percent)) return fail('bad_args', 'Indica el porcentaje de potencia.');
+      return sim.power(clamp(Math.abs(a.percent), 0, 100), a.direction === 'astern' ? -1 : 1);
+    },
+    engine_step(a){
+      if(a.direction !== 'up' && a.direction !== 'down') return fail('bad_args');
+      return sim.engineStep(a.direction);
+    },
+    standby(){ return ok('Máquinas listas'); },
       manual_control(){ return sim.manualControl(); },
       set_wind(a){
         const from = dirOf(a, 'from_deg', 'from_point');

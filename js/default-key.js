@@ -1,0 +1,3 @@
+/* Clave por defecto OFUSCADA (AES-GCM, js/keybox.js). No es seguridad: cualquiera con las herramientas del navegador puede obtenerla.
+   Es temporal: rótala y limita el gasto del proyecto en OpenAI. Regenerar: ASD_KEY=... node tools/encrypt-default-key.js */
+window.ASD_DEFAULT_KEY = {"v":1,"salt":"eRy961jzTJa/HDFfHoii/Q==","iv":"MOIb9ViKXVDytAvQ","data":"wxS1NsThCAPxwnoihyDZ40+vFfeIVfu+E/4rsz4U1v8UtqOqu1wjNrPuhOTIZbjFtlBdvI1m0VA3YwaTpkW1s24I+z6eXt/4qsprT2l+gFcvB6MDljIX5qkwxDNcJ2aQglEDQ4wF2YlOH6JzMMaVIwUOumyQ/gpRrMR0A+toWnp65NNKrmpNhQkVsZW2qtQu5HFl1HCP8UK6gKFz4TPB/OMfmgxdnh2Gg0xJX7xyEMAoHtTC"};

@@ -12,6 +12,11 @@
 })(typeof self !== 'undefined' ? self : this, function(){
   'use strict';
 
+  function intentsMod(){
+    try{ if(typeof module === 'object' && module.exports) return require('./intents.js'); }catch(e){}
+    return (typeof self !== 'undefined' && self.ASDIntents) || null;
+  }
+
   const strip = s => String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
   /* ---------- Números hablados (ES/EN) ---------- */
@@ -30,7 +35,7 @@
   /* Texto -> cadena normalizada. Las cifras dichas dígito a dígito ("cero nueve cero", "0 9 0") se unen en "090";
      los números dichos como palabra ("noventa", "diez") llevan marca "#": sirven para grados, ángulos o nudos pero no para un rumbo. */
   function normalize(text){
-    let s = strip(text).replace(/°/g, ' ');
+    let s = strip(text).replace(/°/g, ' ').replace(/por\s*ciento|porciento|per\s*cent|percent|%/g, ' pct ');
     s = s.replace(/([a-z])-([a-z])/g, '$1 $2').replace(/(\d),(\d)/g, '$1.$2');
     s = s.replace(/[^a-z0-9. ]/g, ' ').replace(/(?<!\d)\.|\.(?!\d)/g, ' ').replace(/\s+/g, ' ').trim();
     if(!s) return '';
@@ -85,6 +90,7 @@
     };
     const expand = p => { let s = p, n = 0; while(/%[A-Z_]+%/.test(s) && n++ < 8) s = s.replace(/%[A-Z_]+%/g, m => db.macros[m] || ''); return s; };
 
+    const IM = intentsMod(), loose = IM ? IM.create({ points: db.points }) : null;
     const compiled = [];
     db.commands.forEach(cmd => ['es', 'en'].forEach(lang => (cmd[lang] || []).forEach(pat => {
       const names = [];
@@ -157,6 +163,8 @@
           const alt = matchAll(s.replace(/#/g, ''));
           if(alt.some(h => h.c.names.indexOf('heading') >= 0)) return { status: 'digits_required', heard: raw, wake: wokeUp };
         }
+        const lp = loose && loose.parse(s);
+        if(lp) return Object.assign(lp, { heard: raw, normalized: s, wake: wokeUp });
         return { status: 'no_match', heard: raw, normalized: s, wake: wokeUp };
       }
       const built = [];
@@ -218,6 +226,26 @@
       }).replace(/\s+([.,])/g, '$1').replace(/\s{2,}/g, ' ').trim();
     }
 
+    /* Viento relativo al buque: "por la amura de estribor", "por la aleta de babor"... */
+    function windRel(e, lang){
+      if(e.wind_rel_deg == null) return '';
+      const r = e.wind_rel_deg > 180 ? 360 - e.wind_rel_deg : e.wind_rel_deg, es = lang === 'es';
+      const side = e.wind_rel_side ? sideWord({ estribor: 'starboard', babor: 'port' }[e.wind_rel_side], lang) : '';
+      if(r < 22.5) return es ? ', por la proa' : ', on the bow';
+      if(r >= 157.5) return es ? ', por la popa' : ', astern';
+      if(es) return `, por ${r < 67.5 ? 'la amura' : r < 112.5 ? 'el través' : 'la aleta'} de ${side}`;
+      return `, on the ${side} ${r < 67.5 ? 'bow' : r < 112.5 ? 'beam' : 'quarter'}`;
+    }
+    /* Sugerencia de derrota: si el desvío supera 30 m, volver hacia la derrota. Solo sugiere; nunca actúa. */
+    function trackSuggestion(res, lang){
+      const r = res.route;
+      if(!r || typeof r === 'string' || !r.cross_track_side || !(r.cross_track_m >= 30)) return '';
+      const off = r.cross_track_side === 'estribor' ? 'starboard' : 'port', back = off === 'port' ? 'starboard' : 'port';
+      const deg = r.cross_track_m >= 100 ? 15 : 10;
+      return lang === 'es' ? `Desvío de ${r.cross_track_m} metros a ${sideWord(off, 'es')}: sugiero caer ${deg} grados a ${sideWord(back, 'es')} hacia la derrota.`
+                           : `Off track ${r.cross_track_m} meters to ${sideWord(off, 'en')}: I suggest altering ${deg} degrees to ${sideWord(back, 'en')} toward the track.`;
+    }
+
     const sideOf = (s, lang) => ({ estribor: 'starboard', babor: 'port' }[s] ? sideWord({ estribor: 'starboard', babor: 'port' }[s], lang) : '');
     const composers = {
       q_heading(res, lang){
@@ -233,6 +261,7 @@
           : `Heading ${h}${o ? ', ordered ' + o : ''}.${sog != null ? ` ${num(sog)} knots.` : ''}${eng ? ' ' + eng + '.' : ''}${alerts ? ' ' + alerts + '.' : ''}`;
       },
       q_drift(res, lang){
+        if(!res.bow && !res.stern) return msg('no_data', lang);
         const end = (e, es, en) => {
           if(!e || !(e.transverse_speed_kn >= 0.05)) return lang === 'es' ? `${es} quieta` : `${en} still`;
           return lang === 'es' ? `${es} ${num(e.transverse_speed_kn)} nudos a ${sideOf(e.side, 'es')}` : `${en} ${num(e.transverse_speed_kn)} knots to ${sideOf(e.side, 'en')}`;
@@ -242,17 +271,80 @@
         return `${end(res.bow, 'Proa', 'Bow')}, ${end(res.stern, 'popa', 'stern')}.`;
       },
       q_recommend(res, lang){
-        const sg = res.suggestion;
-        if(!sg) return lang === 'es' ? 'Sin caída significativa.' : 'No significant fall.';
-        const side = sideWord(sg.side, lang);
-        if(sg.type === 'alter') return lang === 'es' ? `Sugiero caer ${sg.degrees} grados a ${side}.` : `I suggest altering ${sg.degrees} degrees to ${side}.`;
-        return lang === 'es' ? `Sugiero timón ${sg.degrees} a ${side}.` : `I suggest ${side} ${sg.degrees}.`;
+        const parts = [], sg = res.suggestion, es = lang === 'es';
+        if(sg){
+          const side = sideWord(sg.side, lang);
+          parts.push(sg.type === 'alter' ? (es ? `Sugiero caer ${sg.degrees} grados a ${side}.` : `I suggest altering ${sg.degrees} degrees to ${side}.`)
+                                         : (es ? `Sugiero timón ${sg.degrees} a ${side}.` : `I suggest ${side} ${sg.degrees}.`));
+        }
+        const t = trackSuggestion(res, lang); if(t) parts.push(t);
+        if(!parts.length && res.suggestion === undefined) return msg('no_data', lang);      // aún no hay fuerzas calculadas
+        if(!parts.length) return es ? 'Sin caída significativa. Sin sugerencias.' : 'No significant fall. No suggestions.';
+        return parts.join(' ');
+      },
+      q_weather(res, lang){
+        const e = res.environment, es = lang === 'es'; if(!e) return msg('no_data', lang);
+        const wind = e.wind_kn >= 0.5
+          ? (es ? `Viento por el ${spoken(e.wind_from_deg, lang)}, ${num(e.wind_kn)} nudos${windRel(e, lang)}.` : `Wind from ${spoken(e.wind_from_deg, lang)}, ${num(e.wind_kn)} knots${windRel(e, lang)}.`)
+          : (es ? 'Sin viento.' : 'No wind.');
+        const cur = e.current_kn >= 0.05
+          ? (es ? `Corriente hacia el ${spoken(e.current_toward_deg, lang)}, ${num(e.current_kn)} nudos.` : `Current setting ${spoken(e.current_toward_deg, lang)}, ${num(e.current_kn)} knots.`)
+          : (es ? 'Sin corriente.' : 'No current.');
+        const sea = es ? `Mar ${num(e.hs_m)} metros.` : `Sea ${num(e.hs_m)} meters.`;
+        const tide = e.tide_m ? (es ? ` Marea ${num(e.tide_m)} metros.` : ` Tide ${num(e.tide_m)} meters.`) : '';
+        return `${wind} ${cur} ${sea}${tide}`;
+      },
+      q_track(res, lang){
+        const r = res.route, es = lang === 'es';
+        if(!r || typeof r === 'string') return es ? 'Sin derrota guiada.' : 'No guided route.';
+        const side = r.cross_track_side ? sideWord({ estribor: 'starboard', babor: 'port' }[r.cross_track_side], lang) : '';
+        const xte = !r.cross_track_m || !side ? (es ? 'En la derrota.' : 'On track.')
+                  : (es ? `Fuera de la derrota ${r.cross_track_m} metros a ${side}.` : `Off track ${r.cross_track_m} meters to ${side}.`);
+        const eta = r.eta_min != null ? (es ? ` Llegada en ${r.eta_min} minutos.` : ` ETA ${r.eta_min} minutes.`) : '';
+        const brg = res.bearing_to_waypoint_spoken && res.bearing_to_waypoint_spoken[lang], cts = res.cts_spoken && res.cts_spoken[lang];
+        return es ? `Punto ${r.waypoint}, ${num(r.distance_nm)} millas${brg ? ', demora ' + brg : ''}${cts ? ', rumbo a gobernar ' + cts : ''}. ${xte}${eta}`
+                  : `Waypoint ${String(r.waypoint).replace(' de ', ' of ')}, ${num(r.distance_nm)} miles${brg ? ', bearing ' + brg : ''}${cts ? ', steer ' + cts : ''}. ${xte}${eta}`;
+      },
+      q_leeway(res, lang){
+        if(res.leeway_deg == null) return msg('no_data', lang);
+        const es = lang === 'es';
+        const sd = (v, side) => (!(v >= 0.1) || !side || side === 'sin caída') ? '' : (es ? ' a ' : ' to ') + sideWord({ estribor: 'starboard', babor: 'port' }[side], lang);
+        return es ? `Abatimiento ${num(res.leeway_deg)} grados${sd(res.leeway_deg, res.leeway_side)}. Deriva ${num(res.drift_deg)} grados${sd(res.drift_deg, res.drift_side)}. ${num(res.sog_kn)} nudos sobre el fondo.`
+                  : `Leeway ${num(res.leeway_deg)} degrees${sd(res.leeway_deg, res.leeway_side)}. Drift ${num(res.drift_deg)} degrees${sd(res.drift_deg, res.drift_side)}. ${num(res.sog_kn)} knots over ground.`;
+      },
+      q_depth(res, lang){
+        const n = res.nav, es = lang === 'es', e = res.environment || {};
+        if(!n || typeof n === 'string') return msg('no_data', lang);
+        const band = n.ukc_m < 0 ? (es ? 'Encallado.' : 'Aground.') : n.ukc_m < 1.5 ? (es ? 'UKC crítico.' : 'UKC critical.') : n.ukc_m < 3 ? (es ? 'UKC bajo.' : 'UKC low.') : '';
+        return (es ? `Profundidad ${num(n.depth_m)} metros. UKC ${num(n.ukc_m)} metros${e.tide_m ? ', marea ' + num(e.tide_m) : ''}. ${band}`
+                   : `Depth ${num(n.depth_m)} meters. UKC ${num(n.ukc_m)} meters${e.tide_m ? ', tide ' + num(e.tide_m) : ''}. ${band}`).trim();
+      },
+      q_speed(res, lang){
+        const n = res.nav, es = lang === 'es';
+        if(!n || typeof n === 'string') return msg('no_data', lang);
+        const eng = res.engine_order ? ((es && L.engine.es && L.engine.es[res.engine_order]) || res.engine_order) : null;
+        const t = res.thrust_pct, r = Math.abs(res.rate_of_turn_deg_s || 0);
+        const rot = r >= 0.05 ? (es ? ` Giro ${num(r)} grados por segundo.` : ` Turning ${num(r)} degrees per second.`) : '';
+        return es ? `${num(n.stw_kn)} nudos al agua, ${num(n.sog_kn)} sobre el fondo.${eng ? ' ' + eng + '.' : ''}${t ? ` Empuje ${t.port} y ${t.stbd} por ciento.` : ''}${rot}`
+                  : `${num(n.stw_kn)} knots through water, ${num(n.sog_kn)} over ground.${eng ? ' ' + eng + '.' : ''}${t ? ` Thrust ${t.port} and ${t.stbd} percent.` : ''}${rot}`;
+      },
+      q_full(res, lang){
+        return ['q_status', 'q_weather', 'q_leeway', 'q_drift', 'q_track', 'q_depth'].map(k => composers[k](res, lang)).join(' ');
       }
     };
 
     /* speak(parsed, resultadoDeLaHerramienta) -> { text, lang } */
     function speak(parsed, res){
       const lang = parsed.lang || 'es';
+      if(parsed.status === 'incomplete') return { text: msg('ask_' + parsed.missing, lang) || msg('no_match', lang), lang };
+      if(parsed.loose && parsed.status === 'ok'){
+        if(res && res.status === 'needs_confirmation') return { text: msg('confirm_' + (res.key || ''), lang) || msg('error', lang), lang };
+        if(res && res.status === 'error') return { text: msg(res.error, lang) || res.message || msg('error', lang), lang };
+        let t = speakTool(parsed.tool, parsed.args, res, lang);
+        if(res && res.warning_code) t += ' ' + msg(res.warning_code, lang);
+        if(res && res.note_code) t += ' ' + msg(res.note_code, lang);
+        return { text: t.trim(), lang };
+      }
       if(parsed.status !== 'ok'){
         const key = parsed.status === 'digits_required' ? 'digits_required' : 'no_match';
         return { text: msg(key, lang === 'en' ? 'en' : 'es'), lang };
@@ -304,6 +396,73 @@
       return null;
     }
 
+    /* Frase de repetición para una llamada que no está en la base (o llegó por el analizador flexible): con el valor YA aplicado. */
+    const ENGINE_EN = { full_ahead: 'Full ahead', half_ahead: 'Half ahead', slow_ahead: 'Slow ahead', dead_slow_ahead: 'Dead slow ahead', stop: 'Stop engines',
+                        dead_slow_astern: 'Dead slow astern', slow_astern: 'Slow astern', half_astern: 'Half astern', full_astern: 'Full astern' };
+    const ENGINE_KEY = {}; Object.keys(ENGINE_EN).forEach(k => { ENGINE_KEY[ENGINE_EN[k]] = k; });
+    const cap = t => t ? t.charAt(0).toUpperCase() + t.slice(1) : t;
+    function speakTool(name, a, res, lang){
+      a = a || {}; res = res || {};
+      const es = lang !== 'en', sp = v => spoken(v, es ? 'es' : 'en');
+      const side = v => sideWord(v, lang);
+      const engLabel = k => { const en = ENGINE_EN[k] || k; return es ? ((L.engine.es && L.engine.es[en]) || en) : en; };
+      switch(name){
+        case 'steer_course': return es ? `Rumbo ${sp(a.degrees)}.` : `Steer course ${sp(a.degrees)}.`;
+        case 'alter_course': return es ? `Cae ${a.degrees} a ${side(a.side)}${res.ordered_heading_spoken ? ', rumbo ' + res.ordered_heading_spoken.es : ''}.`
+                                       : `Alter ${a.degrees} to ${side(a.side)}${res.ordered_heading_spoken ? ', course ' + res.ordered_heading_spoken.en : ''}.`;
+        case 'helm_order': {
+          const o = a.order;
+          if(o === 'port' || o === 'starboard') return `${cap(side(o))} ${a.angle}.`;
+          if(o === 'hard_port' || o === 'hard_starboard') return es ? `Todo a ${side(o.slice(5))}.` : `Hard to ${side(o.slice(5))}.`;
+          if(o === 'midships') return es ? 'Timón a la vía.' : 'Midships.';
+          if(o === 'steady') return es ? 'Así.' : 'Steady.';
+          if(o === 'ease') return es ? `Timón a ${side(res.helm_angle < 0 ? 'port' : 'starboard')} ${a.angle}.` : `Ease to ${a.angle}.`;
+          if(o === 'nothing_port' || o === 'nothing_starboard'){
+            const sd = side(o.slice(8));
+            return res.no_change ? (es ? `Nada a ${sd}, sin cambio.` : `Nothing to ${sd}, no change.`) : (es ? `Nada a ${sd}.` : `Nothing to ${sd}.`);
+          }
+          return msg('done', lang);
+        }
+        case 'engine_order': {
+          if(a.order === 'stop'){
+            if(a.side === 'port' || a.side === 'starboard') return es ? `Máquina de ${side(a.side)} parada.` : `${cap(side(a.side))} engine stopped.`;
+            return es ? 'Máquinas paradas.' : 'Engines stopped.';
+          }
+          const lab = engLabel(a.order).toLowerCase();
+          if(a.side === 'port' || a.side === 'starboard') return es ? `Máquina de ${side(a.side)} ${lab}.` : `${cap(side(a.side))} engine ${lab}.`;
+          return es ? `Máquinas ${lab}.` : `Engines ${lab}.`;
+        }
+        case 'engine_pair': return es ? `Babor ${engLabel(a.port).toLowerCase()}, estribor ${engLabel(a.starboard).toLowerCase()}.`
+                                      : `Port ${engLabel(a.port).toLowerCase()}, starboard ${engLabel(a.starboard).toLowerCase()}.`;
+        case 'speed_order': {
+          const v = res.ordered_speed_kn != null ? res.ordered_speed_kn : (a.knots != null ? (a.direction === 'astern' ? -a.knots : a.knots) : null);
+          if(v == null) return msg('done', lang);
+          return es ? `Velocidad ${num(Math.abs(v))} nudos${v < 0 ? ' atrás' : ''}.` : `Speed ${num(Math.abs(v))} knots${v < 0 ? ' astern' : ''}.`;
+        }
+        case 'power_percent': {
+          const back = a.direction === 'astern';
+          return es ? `Empuje ${num(a.percent)} por ciento ${back ? 'atrás' : 'avante'}.` : `Power ${num(a.percent)} percent ${back ? 'astern' : 'ahead'}.`;
+        }
+        case 'engine_step': return es ? `${engLabel(ENGINE_KEY[res.engine_order] || 'stop')}.` : `${res.engine_order || 'Engines'}.`;
+        case 'standby': return es ? 'Máquinas listas.' : 'Engines ready.';
+        case 'all_stop': return es ? 'Alto general.' : 'All stop.';
+        case 'manual_control': return es ? 'Control manual.' : 'Manual control.';
+        case 'set_wind': {
+          const kn = res.knots != null ? res.knots : a.knots;
+          return es ? `Viento${kn != null ? ' ' + num(kn) + ' nudos' : ''}${a.from_deg != null ? ' por el ' + spoken(a.from_deg, 'es') : ''}.`
+                    : `Wind${kn != null ? ' ' + num(kn) + ' knots' : ''}${a.from_deg != null ? ' from ' + spoken(a.from_deg, 'en') : ''}.`;
+        }
+        case 'set_current': {
+          const kn = res.knots != null ? res.knots : a.knots;
+          const dir = a.toward_deg != null ? (es ? ' hacia el ' + spoken(a.toward_deg, 'es') : ' toward ' + spoken(a.toward_deg, 'en'))
+                    : a.from_deg != null ? (es ? ' por el ' + spoken(a.from_deg, 'es') : ' from ' + spoken(a.from_deg, 'en')) : '';
+          return es ? `Corriente${kn != null ? ' ' + num(kn) + ' nudos' : ''}${dir}.` : `Current${kn != null ? ' ' + num(kn) + ' knots' : ''}${dir}.`;
+        }
+        case 'set_sea': return a.tide_m != null ? (es ? `Marea ${num(a.tide_m)} metros.` : `Tide ${num(a.tide_m)} meters.`) : (es ? `Mar ${num(a.hs_m)} metros.` : `Sea ${num(a.hs_m)} meters.`);
+        default: return res.message && es ? String(res.message) + '.' : msg('done', lang);
+      }
+    }
+
     /* Texto de práctica o de vista previa de una orden ("Rumbo 090"), para el panel. */
     function describe(parsed){
       if(parsed.status !== 'ok') return '';
@@ -318,7 +477,7 @@
              'dead slow ahead, stop engines, para máquinas, viento por el este, wind from the east, corriente, current, nudos, knots, Marina.';
     }
 
-    return { parse, speak, describe, fromTool, transcriptionPrompt, db, compiledCount: compiled.length };
+    return { parse, speak, speakTool, describe, fromTool, transcriptionPrompt, db, compiledCount: compiled.length };
   }
 
   return { create, normalize, spoken, strip };

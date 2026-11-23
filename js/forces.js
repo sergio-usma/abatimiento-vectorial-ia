@@ -24,8 +24,14 @@
     forceDead: 500,       // N: por debajo, la fuerza lateral equivalente se considera nula
     degOk: 1.5,           // grados: caída no significativa
     degWarn: 6, degAlert: 12,
-    rateOk: 0.3           // °/s: giro no significativo
+    rateOk: 0.3,          // °/s: giro no significativo
+    // Hidrodinámica del casco (calibrada para que, con arrancada, el pivote quede hacia 1/3 de eslora desde la proa)
+    stripX: 0.25,         // estaciones de resistencia lateral de proa y popa, a ±stripX·L del centro
+    liftCy: 1.5,          // sustentación lateral equivalente del casco con arrancada (incluye la quilla/skeg de un remolcador ASD)
+    liftX: -0.15,         // posición de esa sustentación, en L respecto al centro (negativo = a popa: da estabilidad direccional)
+    pivotRateMin: 0.2     // °/s: por debajo de este giro el pivote no está definido
   };
+  const RHO_W = 1025;
 
   /* Contribuciones al balance de fuerzas, tal como las suma calcularFuerzas(): propulsores, viento, agua y amortiguamiento. */
   function contributions(F){
@@ -33,15 +39,46 @@
       { key:'port',      Fx:F.FxP,   Fy:F.FyP,   M:F.torqueP },
       { key:'starboard', Fx:F.FxS,   Fy:F.FyS,   M:F.torqueS },
       { key:'wind',      Fx:F.windFx, Fy:F.windFy, M:F.torqueWind },
-      { key:'water',     Fx:F.Fu,    Fy:F.Fw,    M:0 },                 // resistencia hidrodinámica (corriente y oleaje incluidos)
+      { key:'water',     Fx:F.Fu,    Fy:F.Fw,    M:F.torqueHull || 0 }, // resistencia hidrodinámica (corriente y oleaje incluidos) y su momento
       { key:'damp',      Fx:0,       Fy:0,       M:F.torqueDamp }       // amortiguamiento de giro
     ];
   }
 
   /* Equivalencia estática: una fuerza lateral Fy y un momento M respecto al centro equivalen a dos fuerzas
-     laterales, en proa y en popa (a ±L/4 del centro): bow + stern = Fy ; (L/4)(bow - stern) = M. */
+     laterales en los extremos reales, proa y popa (a ±L/2 del centro): bow + stern = Fy ; (L/2)(bow - stern) = M.
+     El par de giro de los propulsores queda así como "popa contra el giro y proa hacia el giro". */
   function endsFrom(Fy, M, L){
-    return { bow: Fy/2 + 2*M/L, stern: Fy/2 - 2*M/L };
+    return { bow: Fy/2 + M/L, stern: Fy/2 - M/L };
+  }
+
+  /* ---------- Hidrodinámica del casco ----------
+     Resistencia lateral por franjas (proa y popa) con la velocidad local w + r·x, más la sustentación del casco con arrancada
+     (fuerza lateral ∝ |u|·w aplicada por delante del centro). Fija dónde está el pivote al virar. Ejes: x a proa, y a estribor. */
+  function hullHydro(ship, u, w, r, Hs){
+    const L = ship.L, xs = CFG.stripX * L, wf = 1 + 0.15 * (Hs || 0) * (Hs || 0);
+    const strip = x => { const v = w + r * x; return -0.5 * (ship.linSway * v + ship.kSway * wf * v * Math.abs(v)); };
+    const Fb = strip(xs), Fs = strip(-xs);
+    const lift = -CFG.liftCy * 0.5 * RHO_W * L * (ship.T || 4.5) * Math.abs(u) * w;
+    return { Fw: Fb + Fs + lift, N: xs * Fb - xs * Fs + CFG.liftX * L * lift, bow: Fb, stern: Fs, lift };
+  }
+  /* Amortiguamiento de guiñada restante: el de diseño menos lo que ya aportan las franjas (a velocidad cero el momento máximo
+     sigue dando la velocidad de giro de diseño). */
+  function yawDamp(ship, r){
+    const xs = CFG.stripX * ship.L;
+    const quad = Math.max(0, ship.kYawQuad - ship.kSway * xs * xs * xs), lin = Math.max(0, ship.kYawLin - ship.linSway * xs * xs);
+    return -(lin * r + quad * r * Math.abs(r));
+  }
+  /* Ecuaciones de Kirchhoff para el casco en ejes propios (masas añadidas m11 en avance, m22 de través, momento de Munk):
+     m11·u̇ = X + m22·v·r ; m22·v̇ = Y − m11·u·r ; I·ṙ = N − (m22 − m11)·u·v. */
+  function accel(ship, st, F){
+    const m11 = ship.effMassSurge, m22 = ship.effMassSway;
+    return { du: (F.X + m22 * st.v * st.r) / m11, dv: (F.Y - m11 * st.u * st.r) / m22, dr: (F.N - (m22 - m11) * st.u * st.v) / ship.effIyaw };
+  }
+  /* Pivote: punto del eje del buque sin velocidad lateral (x = -w/r, positivo a proa del centro) y su distancia a la proa en fracción de eslora. */
+  function pivot(w, r, L){
+    if(Math.abs(r) * R2D < CFG.pivotRateMin) return { defined: false, x: null, fromBowFrac: null, inside: null };
+    const x = -w / r, frac = (L / 2 - x) / L;
+    return { defined: true, x, fromBowFrac: frac, inside: frac >= 0 && frac <= 1 };
   }
 
   /* Fuerza neta total y aceleración (con las mismas masas efectivas que usa la integración). */
@@ -62,7 +99,10 @@
       const cands = { viento: Math.abs(by.wind[k]), agua: Math.abs(by.water[k] + by.damp[k]), propulsores: Math.abs(thrust(k)) };
       return Object.keys(cands).reduce((a, b) => cands[a] >= cands[b] ? a : b);
     };
-    return { bow: total.bow, stern: total.stern, by, cause: { bow: cause('bow'), stern: cause('stern') } };
+    const sum = (ks, k) => ks.reduce((a, key) => a + by[key][k], 0);
+    const action = { bow: sum(['port', 'starboard', 'wind'], 'bow'), stern: sum(['port', 'starboard', 'wind'], 'stern') };
+    const water = { bow: sum(['water', 'damp'], 'bow'), stern: sum(['water', 'damp'], 'stern') };
+    return { bow: total.bow, stern: total.stern, action, water, by, cause: { bow: cause('bow'), stern: cause('stern') } };
   }
 
   /* Vectores de velocidad transversal de proa y popa (Bow/Stern Transverse Speed Vectors, como en ECDIS y consolas
@@ -153,9 +193,10 @@
     const fall = caida(st.uGround != null ? st.uGround : st.u, st.wGround != null ? st.wGround : st.w, st.yawRate, ship.L);
     const rec = recommend({ bowDeg: fall.bow.deg, sternDeg: fall.stern.deg, bowKn: fall.bow.knots, sternKn: fall.stern.knots,
                             yawDegS: st.yawRate * R2D, cause: ends.cause, headingErrDeg: st.headingErrDeg });
-    return { net: n, ends, fall, rec, terminal: terminalSpeed(F, ship), contributions: contributions(F),
+    const wG = st.wGround != null ? st.wGround : st.w;
+    return { net: n, ends, fall, pivot: pivot(wG, st.yawRate, ship.L), rec, terminal: terminalSpeed(F, ship), contributions: contributions(F),
              jets: jets(F, ship, { port: st.azP, starboard: st.azS }), thrust: thrustSum(F), chain: chain(F) };
   }
 
-  return { CFG, contributions, endsFrom, net, lateralEnds, caida, jets, thrustSum, chain, terminalSpeed, recommend, analyze, KN };
+  return { CFG, hullHydro, yawDamp, accel, pivot, contributions, endsFrom, net, lateralEnds, caida, jets, thrustSum, chain, terminalSpeed, recommend, analyze, KN };
 });

@@ -123,8 +123,11 @@ test('helm: port/starboard fijan velocidad de giro; midships y steady fijan rumb
   assert.equal(h.helm_angle, 35);
   assert.ok(Math.abs(h.target_rate_deg_s - 8) < 0.11);
   const m = c.helm('midships', null, 120, 0.5, 8);
-  assert.equal(c.state.mode, 'heading');
-  assert.equal(m.ordered_heading, 122);                                      // anticipa 4 s de giro residual
+  assert.equal(c.state.mode, 'rate');                                        // a la vía: timón a cero, no fija rumbo
+  assert.equal(c.state.rateDegS, 0); assert.equal(m.helm_angle, 0); assert.equal(c.state.hdgTarget, null);
+  const st = c.helm('steady', null, 120, 0.5, 8);
+  assert.equal(c.state.mode, 'heading');                                     // así: mantiene el rumbo alcanzado
+  assert.equal(st.ordered_heading, 122);                                     // anticipa 4 s de giro residual
 });
 
 test('engine: telégrafo completo y orden desconocida', () => {
@@ -200,4 +203,82 @@ test('rumbos por dígito: 000, 005, 030, 090, 305, 359 en español e inglés', (
   assert.equal(s(305).es, 'tres cero cinco'); assert.equal(s(305).en, 'three zero five');
   assert.equal(s(359).es, 'tres cinco nueve');
   assert.equal(s(-10).digits, '350'); assert.equal(s(360).digits, '000');
+});
+
+/* ---------- Velocidad en nudos, porcentaje, por motor, ease / nothing ---------- */
+function simSurge(ctl, { v0 = 0, secs = 400 }){
+  let v = v0, t = 0, reachedAt = null; const dt = 0.5, events = [];
+  while(t < secs){
+    const u = ctl.step({ ship, hdgDeg: 0, yawRateRad: 0, dt, surgeKn: v });
+    const dir = u.phi === 180 ? -1 : 1, f = u.T0 / (ship.thrustMax * 0.5);
+    // casco: aceleración proporcional a la potencia, resistencia cuadrática (máx ~10 kn a plena potencia)
+    v += (dir * f * 0.9 - 0.0090 * v * Math.abs(v)) * dt; t += dt;
+    u.events.forEach(e => events.push({ t, ...e }));
+    if(reachedAt === null && Math.abs(Math.abs(ctl.state.speedKn) - Math.abs(v)) < 0.3) reachedAt = t;
+  }
+  return { v, reachedAt, events };
+}
+
+test('velocidad objetivo: converge a ±0.3 kn, avante y atrás, y avisa una sola vez', () => {
+  let c = O.create(); c.speed(6);
+  let r = simSurge(c, {});
+  assert.ok(Math.abs(r.v - 6) < 0.3, `v final ${r.v}`);
+  assert.equal(r.events.filter(e => e.type === 'speed_achieved').length, 1);
+  assert.ok(c.state.speedF > 0 && c.state.speedF < 1);
+  c = O.create(); c.speed(-3);
+  r = simSurge(c, {});
+  assert.ok(Math.abs(r.v + 3) < 0.3, `v final ${r.v}`);
+});
+
+test('velocidad: reducir desde más rápido no pone atrás y baja la potencia', () => {
+  const c = O.create(); c.speed(3);
+  const r = simSurge(c, { v0: 8 });
+  assert.ok(Math.abs(r.v - 3) < 0.35, `v final ${r.v}`);
+});
+
+test('potencia en porcentaje: 50 % avante y 30 % atrás', () => {
+  const c = O.create(); c.power(50, 1);
+  let u = c.step({ ship, hdgDeg: 0, yawRateRad: 0, dt: 0.1 });
+  assert.equal(u.phi, 0); assert.ok(Math.abs(u.T0 - 0.5 * ship.thrustMax * 0.5) < 1e-6);
+  assert.match(c.describe(), /Power 50%/);
+  c.power(30, -1);
+  u = c.step({ ship, hdgDeg: 0, yawRateRad: 0, dt: 0.1 });
+  assert.equal(u.phi, 180); assert.ok(Math.abs(u.T0 - 0.3 * ship.thrustMax * 0.5) < 1e-6);
+});
+
+test('por motor: babor avante y estribor atrás; "ambas" lo borra', () => {
+  const c = O.create(); c.engine('slow_ahead', 'port'); c.engine('slow_astern', 'starboard');
+  let u = c.step({ ship, hdgDeg: 0, yawRateRad: 0, dt: 0.1 });
+  assert.ok(u.sides); assert.equal(u.sides.P.phi, 0); assert.equal(u.sides.S.phi, 180);
+  const a = O.allocate({ ship, Nd: 0, T0: u.T0, phi: u.phi, sides: u.sides });
+  assert.equal(a.azP, 0); assert.equal(a.azS, 180); assert.ok(a.thrP > 0 && a.thrS > 0);
+  assert.match(c.describe(), /P Slow ahead \/ S Slow astern/);
+  c.engine('half_ahead', 'both');
+  u = c.step({ ship, hdgDeg: 0, yawRateRad: 0, dt: 0.1 });
+  assert.equal(u.sides, null);
+});
+
+test('por motor: si ambos lados quedan iguales vuelve a la orden común', () => {
+  const c = O.create(); c.engine('slow_ahead'); c.engine('half_ahead', 'port'); c.engine('half_ahead', 'starboard');
+  assert.equal(c.state.telegraph, 'half_ahead'); assert.equal(c.perSide(), null);
+});
+
+test('un punto del telégrafo: aumenta y reduce avante, atrás y desde stop', () => {
+  const c = O.create(); c.engine('slow_ahead');
+  c.engineStep('up'); assert.equal(c.state.telegraph, 'half_ahead');
+  c.engineStep('down'); c.engineStep('down'); assert.equal(c.state.telegraph, 'dead_slow_ahead');
+  c.engineStep('down'); assert.equal(c.state.telegraph, 'stop');
+  c.engineStep('up'); assert.equal(c.state.telegraph, 'dead_slow_ahead');
+  c.engine('half_astern'); c.engineStep('down'); assert.equal(c.state.telegraph, 'slow_astern');
+});
+
+test('timón: ease conserva la banda; nothing to port solo frena un giro a babor', () => {
+  const c = O.create();
+  c.helm('port', 20, 90, 0, 8); assert.equal(c.state.rateDegS < 0, true);
+  c.helm('ease', 10, 90, 0, 8); assert.match(c.state.helmLabel, /Port 10/);
+  const c2 = O.create(); c2.helm('starboard', 15, 90, 0, 8);
+  const r = c2.helm('nothing_port', null, 90, 0, 8);
+  assert.equal(r.no_change, true); assert.match(c2.state.helmLabel, /Starboard 15/);
+  const c3 = O.create(); c3.helm('port', 15, 90, 0, 8);
+  c3.helm('nothing_port', null, 90, -1, 8); assert.equal(c3.state.mode, 'heading');
 });

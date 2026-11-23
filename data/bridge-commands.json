@@ -268,7 +268,16 @@
   "unavailable": {
    "es": "Voz no disponible.",
    "en": "Voice unavailable."
-  }
+  },
+  "ask_heading": { "es": "¿Qué rumbo?", "en": "What heading?" },
+  "ask_side": { "es": "¿A qué banda?", "en": "Which side?" },
+  "ask_angle": { "es": "¿Cuántos grados de timón?", "en": "How many degrees of helm?" },
+  "ask_degrees": { "es": "¿Cuántos grados?", "en": "How many degrees?" },
+  "ask_value": { "es": "¿Qué valor?", "en": "What value?" },
+  "ask_direction": { "es": "¿De dónde?", "en": "From where?" },
+  "ask_engine": { "es": "¿Qué orden de máquinas?", "en": "Which engine order?" },
+  "ask_speed": { "es": "¿Cuántos nudos?", "en": "How many knots?" },
+  "ask_percent": { "es": "¿Qué porcentaje?", "en": "What percentage?" }
  },
  "commands": [
   {
@@ -1937,6 +1946,114 @@
    "guide": false
   },
   {
+   "id": "speed_order",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "speed_order",
+   "args": { "knots": "{kn}" },
+   "es": [
+    "(manten|mantenga|mantengan|mantener|haga|ponga) (una |la )?(velocidad )?(de |a )?%KN_ES%",
+    "(reduce|reduzca|aumenta|aumente|baja|sube)( la)? velocidad (a|hasta) %KN_ES%"
+   ],
+   "en": [
+    "(maintain|make|keep)( a)?( speed)?( of)? %KN_EN%",
+    "(reduce|increase|decrease)( the)? speed (to|at) %KN_EN%"
+   ],
+   "say": { "es": "Velocidad{kn:kn_es}.", "en": "Speed{kn:kn_en}." },
+   "examples": {
+    "es": [ "Mantén seis nudos", "Reduce la velocidad a 4 nudos" ],
+    "en": [ "Maintain a speed of 6 knots", "Make four knots" ]
+   }
+  },
+  {
+   "id": "power_ahead",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "power_percent",
+   "args": { "percent": "{kn}", "direction": "ahead" },
+   "es": [ "(empuje|potencia) {kn} pct( avante| adelante)?" ],
+   "en": [ "(power|thrust|push) {kn} pct( ahead)?" ],
+   "say": { "es": "Empuje {kn} por ciento avante.", "en": "Power {kn} percent ahead." },
+   "examples": {
+    "es": [ "Empuje cincuenta por ciento" ],
+    "en": [ "Push 50 percent" ]
+   }
+  },
+  {
+   "id": "power_astern",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "power_percent",
+   "args": { "percent": "{kn}", "direction": "astern" },
+   "es": [ "(empuje|potencia) {kn} pct (atras|a popa)", "(atras|ciar) {kn} pct" ],
+   "en": [ "(power|thrust|push) {kn} pct astern" ],
+   "say": { "es": "Empuje {kn} por ciento atrás.", "en": "Power {kn} percent astern." },
+   "examples": {
+    "es": [ "Potencia 30 por ciento atrás" ],
+    "en": [ "Power 25 percent astern" ]
+   },
+   "guide": false
+  },
+  {
+   "id": "helm_ease",
+   "cat": "Timón",
+   "kind": "order",
+   "tool": "helm_order",
+   "args": { "order": "ease", "angle": "{angle}" },
+   "es": [ "menos (cana|timon),? {angle}", "(alivia|aliviar|suaviza) (a )?{angle}" ],
+   "en": [ "ease( the helm| the rudder| her)?( to)? {angle}" ],
+   "say": { "es": "Menos caña, {angle}.", "en": "Ease to {angle}." },
+   "examples": {
+    "es": [ "Menos caña, diez" ],
+    "en": [ "Ease to ten" ]
+   }
+  },
+  {
+   "id": "helm_nothing",
+   "cat": "Timón",
+   "kind": "order",
+   "tool": "helm_order",
+   "args": { "order": "nothing_{side}" },
+   "es": [ "nada( a)?( la)? {side}" ],
+   "en": [ "nothing( to)?( the)? {side}" ],
+   "say": { "es": "Nada a {side:side}.", "en": "Nothing to {side:side}." },
+   "examples": {
+    "es": [ "Nada a babor" ],
+    "en": [ "Nothing to starboard" ]
+   },
+   "guide": false
+  },
+  {
+   "id": "engine_step_down",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_step",
+   "args": { "direction": "down" },
+   "es": [ "(reduce|reduzca|baja|disminuye)( la)? velocidad", "un punto menos" ],
+   "en": [ "(reduce|decrease|slow down|ease)( the)? (speed|engines)" ],
+   "say": { "es": "Un punto menos.", "en": "One step down." },
+   "examples": {
+    "es": [ "Reduce velocidad" ],
+    "en": [ "Reduce speed" ]
+   },
+   "guide": false
+  },
+  {
+   "id": "engine_step_up",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_step",
+   "args": { "direction": "up" },
+   "es": [ "(aumenta|aumente|sube)( la)? velocidad", "un punto mas" ],
+   "en": [ "(increase|raise)( the)? (speed|engines)" ],
+   "say": { "es": "Un punto más.", "en": "One step up." },
+   "examples": {
+    "es": [ "Aumenta velocidad" ],
+    "en": [ "Increase speed" ]
+   },
+   "guide": false
+  },
+  {
    "id": "q_status",
    "cat": "Consultas",
    "kind": "query",
@@ -1999,13 +2116,13 @@
    "kind": "query",
    "tool": "drift_report",
    "es": [
-    "((informe|reporte|informa|reporta|dame) (de |del |la |el )*)?(deriva|abatimiento|caida)( actual)?",
+    "((informe|reporte|informa|reporta|dame) (de |del |la |el )*)?caida( actual)?( de proa y popa)?",
     "como (cae|esta cayendo|va cayendo)( la)? (proa|popa)",
     "como (caen|estan cayendo) (proa|popa|proa y popa)"
    ],
    "en": [
-    "(drift|leeway|fall) report",
-    "report (the )?(drift|leeway|fall)",
+    "fall report",
+    "report (the )?(bow and stern )?fall",
     "how is the (bow|stern) (falling|swinging|drifting)",
     "(bow|stern) (fall|drift)"
    ],
@@ -2015,14 +2132,191 @@
    },
    "examples": {
     "es": [
-     "Informe de deriva",
+     "Informe de caída",
      "¿Cómo cae la proa?"
     ],
     "en": [
-     "Report drift",
+     "Report fall",
      "How is the bow falling"
     ]
    }
+  },
+  {
+   "id": "q_leeway",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "drift_report",
+   "es": [
+    "((informe|reporte|informa|reporta|dame|dime|cual es) (de |del |la |el )*)?(abatimiento|deriva)( actual)?"
+   ],
+   "en": [
+    "(leeway|drift) report",
+    "report (the )?(leeway|drift)",
+    "(what is|give me) (the )?(leeway|drift)"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Informe de abatimiento",
+     "Informe de deriva"
+    ],
+    "en": [
+     "Report leeway",
+     "Drift report"
+    ]
+   }
+  },
+  {
+   "id": "q_weather",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "get_status",
+   "es": [
+    "((informe|reporte|informa|reporta|dame|dime|cual es) (de |del |la |el |las |sobre )*)?(meteo|meteorologico|meteorologia|clima|condiciones meteorologicas|condiciones del tiempo)( actual| actuales)?",
+    "como esta el (tiempo|clima)"
+   ],
+   "en": [
+    "(weather|met) (report|update)",
+    "report (the )?weather",
+    "(what is|give me) (the )?weather",
+    "weather"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Informe meteorológico",
+     "Dame la meteo"
+    ],
+    "en": [
+     "Weather report",
+     "Weather update"
+    ]
+   }
+  },
+  {
+   "id": "q_track",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "get_status",
+   "es": [
+    "(informe|reporte|informa|reporta|dame|dime) (de |del |la |el |sobre )*(derrota|seguimiento( de (la )?derrota)?|desvio( de (la )?derrota)?)( actual)?",
+    "como vamos (en|de|con) (la )?derrota",
+    "(desvio|error) de derrota"
+   ],
+   "en": [
+    "(track|route|cross track) (report|status)",
+    "report (the )?(track|route|cross track)",
+    "how are we doing on (the )?(track|route)",
+    "(cross track|xte)"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Informe de derrota",
+     "¿Cómo vamos de derrota?"
+    ],
+    "en": [
+     "Track report",
+     "Cross track"
+    ]
+   }
+  },
+  {
+   "id": "q_depth",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "get_status",
+   "es": [
+    "((informe|reporte|informa|reporta|dame|dime|cual es) (de |del |la |el |sobre )*)?(profundidad|ukc|sonda|agua bajo la quilla)( actual)?"
+   ],
+   "en": [
+    "(depth|ukc|under keel clearance) (report|status)",
+    "report (the )?(depth|ukc|under keel clearance)",
+    "(what is|give me) (the )?(depth|ukc)",
+    "(depth|ukc)"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Informe de profundidad",
+     "UKC"
+    ],
+    "en": [
+     "Depth report",
+     "What is the UKC"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "q_speed",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "get_status",
+   "es": [
+    "(informe|reporte|informa|reporta|dame|dime|cual es) (de |del |la |el |sobre )*(velocidad|maquinas|empuje)( actual)?",
+    "que velocidad (llevamos|llevo|tenemos|tengo)"
+   ],
+   "en": [
+    "(speed|engine|engines|thrust) (report|status)",
+    "report (the )?(speed|engines?|thrust)",
+    "what is (our|the) speed",
+    "how fast (are we going|are we)"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Informe de velocidad",
+     "¿Qué velocidad llevamos?"
+    ],
+    "en": [
+     "Speed report",
+     "What is our speed"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "q_full",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "get_status",
+   "es": [
+    "(informe|reporte) (completo|general)",
+    "(estado|situacion) completo"
+   ],
+   "en": [
+    "(full|complete) (report|status)",
+    "report all"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Informe completo"
+    ],
+    "en": [
+     "Full report"
+    ]
+   },
+   "guide": false
   },
   {
    "id": "q_recommend",

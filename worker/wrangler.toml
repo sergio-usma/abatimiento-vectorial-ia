@@ -6,7 +6,7 @@ compatibility_date = "2025-09-01"
 # Origen(es) de tu GitHub Pages, sin barra final. Separa varios con comas.
 # Ejemplo: "https://TU-USUARIO.github.io"
 ALLOWED_ORIGINS = "https://TU-USUARIO.github.io"
-MODEL = "gpt-realtime"
+MODEL = "gpt-realtime-1.5"
 VOICE = "marin"
 
 # La clave real NO va aquí. Se guarda como secreto:
