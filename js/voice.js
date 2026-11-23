@@ -1,11 +1,19 @@
-/* ASD Bridge Simulator: control por voz con la API Realtime de OpenAI (WebRTC directo desde el navegador).
+/* ASD Bridge Simulator: voz con la API Realtime de OpenAI (WebRTC directo desde el navegador).
+ *
+ * Una sola vuelta, sin cuellos de botella:
+ *   1. El práctico habla. El modelo OYE el audio y responde SOLO con una llamada a herramienta (tool_choice 'required', salida de texto:
+ *      nunca habla ni escribe prosa). No hay paso previo por una transcripción.
+ *   2. La llamada se valida contra data/bridge-commands.json (grammar.fromTool): si no existe en la base, NO se ejecuta.
+ *   3. Se ejecuta al instante con VoiceTools/SimAPI y Marina repite con una frase fija y breve, generada localmente (voz del navegador:
+ *      sin segunda vuelta al modelo). Opcional: voz natural de OpenAI.
+ *   4. La transcripción (en paralelo, solo informa) se compara con la base: si lo oído era otra orden, se avisa en pantalla.
+ *   5. Sin pedirlo, solo habla una alarma crítica y "rumbo alcanzado". Informes y recomendaciones, solo si los pides.
+ *
+ * La práctica escrita y las frases de la guía usan la gramática local (js/grammar.js): instantáneas y sin conexión.
  *
  * Claves: NUNCA se guardan en el repositorio.
  *   - Pruebas: clave en el campo "Clave de OpenAI" (sessionStorage) o js/config.local.js (ignorado por git).
- *     Con ella se pide una clave efímera a /v1/realtime/client_secrets y se usa solo esa para la llamada.
  *   - Producción: ASD_CONFIG.tokenEndpoint apunta al Worker de worker/realtime-token.js.
- *
- * Voz: PTT (mantener la tecla V o el botón del micrófono) o manos libres (VAD, palabra de activación "Marina").
  */
 (function(){
   'use strict';
@@ -14,43 +22,35 @@
   const byId = id => document.getElementById(id);
   const KEY_STORE = 'asd.openaiKey';
   const MIN_HOLD_MS = 250;
+  const DB_URL = 'data/bridge-commands.json';
 
-  const INSTRUCTIONS = `Eres "Marina", timonel y oficial de máquinas de un remolcador con doble propulsor azimutal (ASD) en la bahía de Cartagena. El usuario es el PRÁCTICO: te da órdenes de puente normalizadas (IMO SMCP) en español o en inglés. Tu voz es de mujer, serena, profesional y breve.
-
-IDIOMA: responde siempre en el idioma de la ÚLTIMA orden del práctico (español o inglés).
-
-CIRCUITO CERRADO, COMO EN UN PUENTE
-1. Ejecuta la orden con la herramienta y repítela al instante, como un timonel: "Rumbo cero nueve cero." / "Steer course zero nine zero." Máquinas: "Full avante." / "Full ahead, aye." Una frase; nada más.
-2. Los rumbos se dicen y se entienden en tres dígitos, dígito a dígito: "cero cero cinco" = 5, "tres cero cero" = 300, "zero zero five" = 5.
-3. Mensajes que empiezan con [EVENTO] los envía el sistema, no el práctico. "[EVENTO] heading_achieved 090" significa que el rumbo ordenado se alcanzó: di "Rumbo cero nueve cero, así." / "Steady on zero nine zero." Otros eventos: anúncialos en una frase; las alarmas con tono firme. No llames herramientas por un evento.
-4. Si la herramienta devuelve un warning o note, dilo en una frase con la acción correcta ("Máquinas paradas: sin empuje no gobierno. Ordene máquinas." / "Engines stopped: no way to steer. Order engine power."), traducido al idioma de la última orden.
-5. Preguntas de estado ("¿cuál es el rumbo?", "report status"): llama get_status y lee solo lo que devuelve. Nunca inventes valores.
-6. Orden ambigua: UNA pregunta corta. Si no es una orden o consulta del puente, declina en una frase.
-7. Acciones críticas (reiniciar todo, borrar derrota, ubicar el buque): llama PRIMERO a la herramienta (no ejecuta nada, devuelve needs_confirmation) y DESPUÉS pregunta "¿Confirmas?" con el resumen y espera. Solo si el práctico dice "confirmo", "sí, hazlo" o "confirm", llama confirm_action con el token. Cualquier otra respuesta la cancela.
-
-FRASEOLOGÍA A HERRAMIENTA
-- Rumbo: "navega con rumbo 090", "rumbo 090", "así, rumbo 090", "steer course 090", "steady on 090" -> steer_course. "Cae/caiga N grados a babor/estribor", "alter course N degrees to port/starboard" -> alter_course (relativo al rumbo ordenado).
-- Timón: "diez a babor / port ten", "veinte a estribor", "todo a babor / hard to port", "timón a la vía / midships", "así / steady" -> helm_order.
-- Máquinas (engine_order): "full avante / avante toda / full ahead" = full_ahead; "media avante / half ahead" = half_ahead; "poca avante / slow ahead" = slow_ahead; "muy poca avante / dead slow ahead" = dead_slow_ahead; "para máquinas / stop engines" = stop; "muy poca atrás", "poca atrás / slow astern", "media atrás / half astern", "full atrás / full astern". "Alto general / all stop" = all_stop.
-- Mando: "control manual / take the con / cancela las órdenes" = manual_control. "Sigue la derrota / follow the route" = set_autopilot. "Centra el buque / center on ship" = ui con follow true.
-- Viento: se da siempre por DE DÓNDE viene: "por el Este", "del noreste", "from 045". "Aumenta viento a 40 nudos por el Este" = set_wind con knots 40 y from_point E. "Aumenta 5 nudos" = delta_knots 5; "baja 3" = delta_knots -3.
-- Corriente: "por el 003" y "from 003" = DESDE el 003 (from_deg). "Hacia el 180", "setting 180" = toward_deg. "Incrementa corriente en 0.5 por el 003" = delta_knots 0.5 con from_deg 3.
-- "a N" = valor absoluto; "en N", "N más", "N menos" = incremento. Puntos cardinales: Norte N, Este E, Sur S, Oeste W (usa "W", nunca "O").
-- El simulador resuelve los azimutales y la potencia: NUNCA los menciones ni pidas azimutes.
-
-Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respondas.`;
+  /* Herramientas "de consulta" y de control que el modelo puede llamar además de las órdenes. Todas llevan lang y wake. */
+  const QUERY = {
+    report_heading:  { tool:'get_status',   id:'q_heading',   desc:'El práctico pregunta el rumbo ("¿cuál es el rumbo?", "what is the heading").' },
+    report_status:   { tool:'get_status',   id:'q_status',    desc:'El práctico pide el estado ("informa el estado", "report status").' },
+    report_drift:    { tool:'drift_report', id:'q_drift',     desc:'El práctico pide el informe de deriva o caída ("¿cómo cae la proa?", "report drift").' },
+    recommendation:  { tool:'drift_report', id:'q_recommend', desc:'El práctico pide una recomendación ("recomendación", "what do you recommend").' }
+  };
+  const CONTROL = {
+    confirm: 'El práctico confirma una acción pendiente ("confirmo", "sí, hazlo", "confirm").',
+    cancel:  'El práctico cancela una acción pendiente ("cancela", "negativo", "cancel").',
+    repeat:  'El práctico pide repetir lo último ("repite", "say again").',
+    unclear: 'Hay una orden pero no la entiendes bien o no está en la lista (incluye un rumbo dicho como número, por ejemplo "treinta"). No ejecuta nada: Marina dirá "Repita".',
+    ignore:  'No es una orden de puente: charla, ruido, una frase suelta, o en manos libres una frase que no empieza por "Marina". No hace nada.'
+  };
 
   /* ---------- Estado ---------- */
   let pc = null, dc = null, micStream = null, micTrack = null, audioEl = null;
   let state = 'off';            // off | connecting | ready | listening | thinking | speaking | error
   let handsFree = false;
-  let holding = false, holdStart = 0;
-  let tools = null;
-  const handled = new Set();
-  let pendingOutputs = [];
-  let assistantText = '';
+  let holding = false, holdStart = 0, heardStart = 0;
+  let tools = null, grammar = null, grammarReady = null, sessionTools = null, instructions = '';
+  let assistantBusy = false;
   let busyTimer = null;
-  const queue = new Map();      // key -> {text, opt}
+  let lastLang = 'es', lastSaid = null;
+  let lastCall = null;          // última orden ejecutada por el modelo (para compararla con la transcripción)
+  const handledCalls = new Set();
+  const queue = new Map();      // key -> {text, lang}
   const lastAt = new Map();     // key -> ts (antirrebote)
 
   const LABEL = { off:'Voz desconectada', connecting:'Conectando…', ready:'Lista', listening:'Escuchando', thinking:'Procesando', speaking:'Hablando', error:'Error de voz' };
@@ -61,6 +61,7 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
     if(btn){ btn.dataset.state = s; btn.setAttribute('aria-pressed', String(s !== 'off' && s !== 'error')); btn.title = LABEL[s] + (s==='off' ? ': mantén para hablar (V)' : ''); }
     const sr = byId('voiceState'); if(sr) sr.textContent = LABEL[s];
     if(window.ASDAudio) ASDAudio.setVoiceActive(s === 'speaking' || s === 'listening' || s === 'thinking');
+    document.dispatchEvent(new CustomEvent('asd:voice', { detail:{ state:s } }));   // lo escucha el panel de puente
     if(s === 'ready') flushQueue();
   }
 
@@ -74,13 +75,62 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
     line.textContent = text;
     while(el.children.length > 2) el.removeChild(el.firstChild);
     clearTimeout(capTimer);
-    if(final) capTimer = setTimeout(()=>{ el.hidden = true; el.textContent = ''; }, 9000);
+    if(final) capTimer = setTimeout(()=>{ el.hidden = true; el.textContent = ''; }, 7000);
   }
   function refreshConfirmBar(){
     const bar = byId('confirmBar'); if(!bar || !tools) return;
     const p = tools.getPending();
     bar.hidden = !p;
     if(p) byId('confirmText').textContent = p.summary + '. ¿Confirmas?';
+  }
+
+  /* ---------- Base de órdenes: gramática, guía, herramientas e instrucciones del modelo ---------- */
+  function loadGrammar(){
+    if(grammarReady) return grammarReady;
+    grammarReady = fetch(DB_URL, { cache:'no-cache' }).then(r => { if(!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+      .then(db => { grammar = ASDGrammar.create(db); buildGuide(db); buildSessionConfig(db); return grammar; })
+      .catch(e => { console.warn('No se pudo cargar ' + DB_URL, e); grammarReady = null; if(typeof aviso === 'function') aviso('No se pudo cargar la base de órdenes de voz.'); return null; });
+    return grammarReady;
+  }
+
+  function buildGuide(db){
+    const names = db.catLabels || {};
+    ['es', 'en'].forEach(lang => {
+      const box = byId(lang === 'es' ? 'guideEs' : 'guideEn'); if(!box) return;
+      const cats = [], by = {};
+      db.commands.forEach(c => {
+        if(c.guide === false || !(c.examples[lang] || []).length) return;
+        if(!by[c.cat]){ by[c.cat] = []; cats.push(c.cat); }
+        by[c.cat].push(c.examples[lang][0]);
+      });
+      box.textContent = '';
+      cats.forEach(cat => {
+        const h = document.createElement('h4'); h.textContent = lang === 'en' ? ((names[cat] || {}).en || cat) : cat; box.appendChild(h);
+        by[cat].forEach(t => { const b = document.createElement('button'); b.type = 'button'; b.className = 'phrase'; b.textContent = t; box.appendChild(b); });
+      });
+    });
+  }
+
+  /* Herramientas de la sesión: las de VoiceTools (menos confirm_action, que lleva token) + consultas y control. Todas con lang y wake. */
+  function buildSessionConfig(db){
+    const extra = { lang:{ type:'string', enum:['es','en'], description:'Idioma en que habló el práctico.' },
+                    wake:{ type:'boolean', description:'true solo si la frase empezó por "Marina".' } };
+    const wrap = (name, description, params) => ({ type:'function', name, description,
+      parameters:{ type:'object', properties:Object.assign({}, (params && params.properties) || {}, extra), required:((params && params.required) || []).concat(['lang', 'wake']) } });
+    const list = VoiceTools.definitions.filter(d => d.name !== 'confirm_action' && d.name !== 'get_status' && d.name !== 'drift_report').map(d => wrap(d.name, d.description, d.parameters));
+    Object.keys(QUERY).forEach(n => list.push(wrap(n, QUERY[n].desc)));
+    Object.keys(CONTROL).forEach(n => list.push(wrap(n, CONTROL[n])));
+    sessionTools = list;
+
+    // Instrucciones cortas y de una sola tarea. La tabla sale de la base: ejemplo -> herramienta.
+    const rows = db.commands.filter(c => c.tool && c.kind !== 'query').map(c => `"${c.examples.es[0] || ''}" / "${c.examples.en[0] || ''}" -> ${c.tool}${c.args ? ' ' + JSON.stringify(c.args) : ''}`);
+    instructions = 'Eres el OÍDO de un timonel, no un asistente. Cada vez que el práctico habla, llama EXACTAMENTE UNA herramienta con lo que dijo, sin inventar, completar ni corregir nada. NUNCA hables ni escribas texto.\n' +
+      '- Si no es una orden de la lista, o no estás seguro: unclear. Si es charla o ruido: ignore.\n' +
+      '- Rumbos: tres dígitos hablados uno a uno ("cero nueve cero" = 90). Un rumbo dicho como número ("treinta") es unclear.\n' +
+      '- Viento y corriente: "por el X" = DESDE X. "hacia X" = toward. "a N" = valor absoluto; "en N" o "N más/menos" = incremento (delta_knots, negativo si baja).\n' +
+      '- lang = "en" si habló en inglés, "es" si en español. wake = true solo si la frase empezó por "Marina".\n' +
+      '- Manos libres: si wake es false, llama ignore.\n' +
+      'Ejemplos (frase -> herramienta):\n' + rows.join('\n');
   }
 
   /* ---------- Clave efímera ---------- */
@@ -115,6 +165,7 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
     setState('connecting');
     try{
       if(!tools) tools = VoiceTools.create(SimAPI);
+      loadGrammar();
       const key = await getEphemeralKey();
       pc = new RTCPeerConnection();
       audioEl = audioEl || new Audio(); audioEl.autoplay = true;
@@ -145,8 +196,8 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
     try{ if(dc) dc.close(); }catch(e){}
     try{ if(pc) pc.close(); }catch(e){}
     if(micStream) micStream.getTracks().forEach(t => t.stop());
-    pc = dc = micStream = micTrack = null; holding = false;
-    handled.clear(); pendingOutputs = []; queue.clear();
+    pc = dc = micStream = micTrack = null; holding = false; assistantBusy = false;
+    queue.clear(); handledCalls.clear();
     setState('off');
   }
   function fatal(msg){
@@ -159,82 +210,156 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
 
   function send(obj){ if(dc && dc.readyState === 'open') dc.send(JSON.stringify(obj)); }
 
+  /* Manos libres: silencio corto (la orden sale pronto). El servidor crea la respuesta, que SIEMPRE es una llamada a herramienta. */
+  const VAD = () => ({ type:'server_vad', threshold:0.5, prefix_padding_ms:200, silence_duration_ms:380, create_response:true, interrupt_response:true });
+
   function onOpen(){
-    send({ type:'session.update', session:{
-      type:'realtime', model:cfg.model, output_modalities:['audio'],
-      instructions: INSTRUCTIONS, tools: tools.definitions, tool_choice:'auto',
-      audio:{
-        input:{
-          transcription:{ model: cfg.transcriptionModel, language:'es' },
-          noise_reduction:{ type:'near_field' },
-          turn_detection: handsFree ? { type:'semantic_vad', create_response:true, interrupt_response:true } : null
-        },
-        output:{ voice: cfg.voice }
-      }
+    loadGrammar().then(g => {
+      send({ type:'session.update', session:{
+        type:'realtime', model:cfg.model,
+        output_modalities:['text'],                       // el modelo no habla: solo llama herramientas
+        instructions, tools: sessionTools || [], tool_choice:'required', max_output_tokens: 120,
+        audio:{
+          input:{
+            // La transcripción corre en paralelo y solo sirve para mostrar "Oí: …" y detectar discrepancias; no retrasa la orden.
+            transcription:{ model: cfg.transcriptionModel, prompt: g ? g.transcriptionPrompt() : '' },
+            noise_reduction:{ type:'near_field' },
+            turn_detection: handsFree ? VAD() : null
+          },
+          output:{ voice: cfg.voice }
+        }
+      }});
+      setState('ready');
+      if(holding) pttStart();
+    });
+  }
+
+  /* ---------- Marina habla: frase fija y breve ---------- */
+  const natural = () => { const el = byId('voiceNatural'); return !!(el && el.checked); };
+  function say(text, lang){
+    text = (text || '').trim(); if(!text) return;
+    lastLang = lang || lastLang;
+    lastSaid = { text, lang: lastLang };
+    caption('bot', 'Marina: ' + text, true);
+    // Por defecto la voz del navegador: instantánea, sin segunda vuelta al modelo y sin posibilidad de que improvise.
+    if(!(natural() && isLive())){ speakFallback(text, lastLang); return; }
+    if(state === 'speaking' || assistantBusy) cancelOutput();
+    assistantBusy = true;
+    send({ type:'response.create', response:{
+      conversation:'none', output_modalities:['audio'], tool_choice:'none', max_output_tokens: Math.min(400, Math.ceil(text.length / 2.5) + 40),
+      instructions: `Pronuncia únicamente estas palabras, en ${lastLang === 'en' ? 'inglés' : 'español'}, y nada más: «${text}»`
     }});
-    setState('ready');
-    if(holding) pttStart();
+  }
+
+  /* Una orden, ya reconocida (por el modelo o por la gramática local): se ejecuta y Marina repite. */
+  function runParsed(p, extra){
+    if(!tools) tools = VoiceTools.create(SimAPI);
+    let res;
+    if(p.kind === 'confirm'){ res = tools.getPending() ? tools.confirmPending() : { status:'error', error:'no_pending' }; }
+    else if(p.kind === 'cancel'){
+      if(!tools.getPending()) return null;                 // un "no" suelto no es una orden
+      tools.cancelPending(); res = { status:'ok' };
+    }
+    else if(p.kind === 'repeat'){ if(lastSaid) say(lastSaid.text, lastSaid.lang); return null; }
+    else res = tools.execute(p.tool, p.args, { origin:'user' });     // se ejecuta ANTES de hablar: la voz no retrasa la maniobra
+    refreshConfirmBar();
+    if(window.ASDAudio) ASDAudio.play(res && res.status === 'error' ? 'alarmSoft' : 'ack');
+    const out = grammar.speak(p, res);
+    say(out.text, out.lang);
+    const ms = heardStart ? Math.round(performance.now() - heardStart) : null;
+    if(ms != null) document.dispatchEvent(new CustomEvent('asd:order', { detail:{ id:p.id, latencyMs:ms, text:out.text } }));
+    return res;
+  }
+
+  /* Llamada a herramienta del modelo (lo que OYÓ). Solo se ejecuta lo que existe en la base. */
+  function onToolCall(name, rawArgs, callId){
+    if(callId){ if(handledCalls.has(callId)) return; handledCalls.add(callId); }
+    let args = {}; try{ args = typeof rawArgs === 'string' ? JSON.parse(rawArgs || '{}') : (rawArgs || {}); }catch(e){}
+    const lang = args.lang === 'en' ? 'en' : 'es', wake = !!args.wake;
+    const g = grammar; if(!g) return;
+    if(callId) send({ type:'conversation.item.create', item:{ type:'function_call_output', call_id:callId, output:'{"ok":true}' } });   // cierra la llamada, sin respuesta
+    assistantBusy = false; if(state === 'thinking') setState('ready');
+    lastCall = null;
+    if(name === 'ignore') return;
+    if(handsFree && !wake) return;                                    // manos libres: solo con "Marina"
+    if(name === 'unclear'){ lastLang = lang; say(g.speak({ status:'no_match', lang }).text, lang); return; }
+    let p;
+    if(CONTROL[name] && name !== 'unclear'){ p = { status:'ok', id:name, kind:name, lang, args:{}, caps:{} }; }
+    else if(QUERY[name]){
+      const q = QUERY[name], res = tools.execute(q.tool, {}, { origin:'user' });
+      const out = g.speak({ status:'ok', id:q.id, kind:'query', lang, caps:{} }, res);
+      refreshConfirmBar(); say(out.text, lang); lastCall = { sig:name }; return;
+    } else {
+      const clean = Object.assign({}, args); delete clean.lang; delete clean.wake;
+      p = g.fromTool(name, clean, lang);
+      if(!p){ say(g.speak({ status:'no_match', lang }).text, lang); return; }   // no está en la base: no se ejecuta
+    }
+    if(p.kind === 'confirm' || p.kind === 'cancel' || p.kind === 'repeat'){ lastCall = { sig:p.kind }; runParsed(p); return; }
+    lastCall = { sig:p.id, tool:p.tool, args:p.args };
+    runParsed(p);
+  }
+
+  /* Transcripción (llega en paralelo): solo informa y vigila. Si lo oído era OTRA orden de la base, se avisa en pantalla. */
+  function onTranscript(text){
+    text = (text || '').trim(); if(text.length < 2 || !grammar) return;
+    caption('user', 'Oí: «' + text + '»', true);
+    const p = grammar.parse(text);
+    if(p.status !== 'ok' || !lastCall) return;
+    const same = lastCall.sig === p.id || lastCall.sig === (p.kind === 'query' ? Object.keys(QUERY).find(k => QUERY[k].id === p.id) : null) ||
+                 (lastCall.tool === p.tool && JSON.stringify(lastCall.args) === JSON.stringify(p.args));
+    if(!same){
+      if(window.ASDAudio) ASDAudio.play('alarmSoft');
+      caption('err', `Revise: oí «${text}» pero ejecuté otra orden`, true);
+    }
+  }
+
+  /* Práctica escrita y guía: la gramática local, sin conexión y sin modelo. */
+  async function sendText(text){
+    text = (text || '').trim(); if(!text) return;
+    heardStart = performance.now();
+    const g = await loadGrammar();
+    if(!g){ say('Voz no disponible.', 'es'); return; }
+    const p = g.parse(text);
+    caption('user', 'Oí: «' + text + '»', true);
+    if(p.status !== 'ok'){ if(window.ASDAudio) ASDAudio.play('alarmSoft'); say(g.speak(p).text, p.lang || lastLang); return; }
+    lastCall = null;
+    runParsed(p);
   }
 
   /* ---------- Eventos del servidor ---------- */
-  function runCall(item){
-    if(!item || item.type !== 'function_call' || handled.has(item.call_id)) return;
-    handled.add(item.call_id);
-    let args = {};
-    try{ args = item.arguments ? JSON.parse(item.arguments) : {}; }catch(e){}
-    const result = tools.execute(item.name, args);
-    if(window.ASDAudio) ASDAudio.play(result.status === 'error' ? 'alarmSoft' : 'ack');
-    pendingOutputs.push({ call_id:item.call_id, output: JSON.stringify(result) });
-    refreshConfirmBar();
-  }
-  function flushOutputs(){
-    if(!pendingOutputs.length) return false;
-    pendingOutputs.forEach(o => send({ type:'conversation.item.create', item:{ type:'function_call_output', call_id:o.call_id, output:o.output } }));
-    pendingOutputs = [];
-    send({ type:'response.create' });
-    return true;
-  }
-
   function onEvent(ev){
     switch(ev.type){
       case 'input_audio_buffer.speech_started':
-        if(handsFree) setState('listening');
+        if(handsFree){ if(state === 'speaking') cancelOutput(); setState('listening'); }
         break;
       case 'input_audio_buffer.speech_stopped':
-        if(handsFree){ if(tools) tools.noteUserTurn(); setState('thinking'); }
+        if(handsFree){ heardStart = performance.now(); setState('thinking'); }
+        break;
+      case 'response.function_call_arguments.done':      // primer momento en que la orden está completa
+        onToolCall(ev.name, ev.arguments, ev.call_id);
+        break;
+      case 'response.output_item.done':                  // respaldo
+        if(ev.item && ev.item.type === 'function_call') onToolCall(ev.item.name, ev.item.arguments, ev.item.call_id);
         break;
       case 'conversation.item.input_audio_transcription.completed':
-        if(ev.transcript && ev.transcript.trim()) caption('user', 'Tú: ' + ev.transcript.trim(), true);
+        onTranscript(ev.transcript);
         break;
       case 'response.created':
-        assistantText = ''; setState('thinking');
-        break;
-      case 'response.output_item.done':
-        runCall(ev.item);
-        break;
-      case 'response.output_audio_transcript.delta':
-        assistantText += ev.delta || ''; caption('bot', 'Marina: ' + assistantText, false);
-        if(state !== 'speaking') setState('speaking');
-        break;
-      case 'response.output_audio_transcript.done':
-        caption('bot', 'Marina: ' + (ev.transcript || assistantText), true);
+        if(!assistantBusy && state !== 'listening') setState('thinking');
         break;
       case 'output_audio_buffer.started':
         setState('speaking'); break;
       case 'output_audio_buffer.stopped':
-        clearTimeout(busyTimer); if(state === 'speaking') setState('ready'); break;
-      case 'response.done': {
-        const out = (ev.response && ev.response.output) || [];
-        out.forEach(runCall);                  // respaldo si no llegó output_item.done
-        if(flushOutputs()) break;              // el modelo hablará tras recibir los resultados
+        assistantBusy = false; clearTimeout(busyTimer); if(state === 'speaking' || state === 'thinking') setState('ready'); break;
+      case 'response.done':
         clearTimeout(busyTimer);
-        busyTimer = setTimeout(() => { if(state === 'speaking' || state === 'thinking') setState('ready'); }, 1500);
+        busyTimer = setTimeout(() => { if(!natural() || !assistantBusy){ assistantBusy = false; if(state === 'speaking' || state === 'thinking') setState('ready'); } }, 400);
         break;
-      }
       case 'error':
         console.warn('Realtime error', ev.error);
         if(ev.error && /invalid_api_key|authentication|expired/i.test(JSON.stringify(ev.error))) fatal('La clave de voz no es válida o caducó.');
         else if(typeof aviso === 'function' && ev.error && ev.error.message) aviso(ev.error.message);
+        assistantBusy = false;
         if(state === 'thinking') setState('ready');
         break;
     }
@@ -244,13 +369,15 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
   function cancelOutput(){
     send({ type:'response.cancel' });
     send({ type:'output_audio_buffer.clear' });
+    assistantBusy = false;
+    if('speechSynthesis' in window) speechSynthesis.cancel();
   }
   function pttStart(){
     holding = true; holdStart = performance.now();
     if(window.ASDAudio) ASDAudio.resume();
     if(!pc){ connect(); return; }                 // al abrirse, onOpen reanuda si sigue pulsado
     if(state === 'connecting' || handsFree) return;
-    if(state === 'speaking' || state === 'thinking') cancelOutput();   // se puede interrumpir
+    if(state === 'speaking' || state === 'thinking') cancelOutput();   // se puede interrumpir a Marina
     send({ type:'input_audio_buffer.clear' });
     if(micTrack) micTrack.enabled = true;
     setState('listening');
@@ -262,9 +389,9 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
     if(micTrack) micTrack.enabled = false;
     if(window.ASDAudio) ASDAudio.play('listenOff');
     if(performance.now() - holdStart < MIN_HOLD_MS){ send({ type:'input_audio_buffer.clear' }); setState('ready'); return; }
-    if(tools) tools.noteUserTurn();
+    heardStart = performance.now();
     send({ type:'input_audio_buffer.commit' });
-    send({ type:'response.create' });
+    send({ type:'response.create' });              // la respuesta es siempre una llamada a herramienta (sesión: tool_choice required, salida de texto)
     setState('thinking');
   }
 
@@ -272,90 +399,64 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
     handsFree = !!on;
     if(micTrack) micTrack.enabled = handsFree;
     if(dc && dc.readyState === 'open'){
-      send({ type:'session.update', session:{ type:'realtime', audio:{ input:{ turn_detection: handsFree ? { type:'semantic_vad', create_response:true, interrupt_response:true } : null } } } });
+      send({ type:'session.update', session:{ type:'realtime', audio:{ input:{ turn_detection: handsFree ? VAD() : null } } } });
     }
     if(handsFree && !pc) connect();
   }
 
-  /* ---------- Texto y avisos del sistema ---------- */
-  async function sendText(text){
-    text = (text || '').trim(); if(!text) return;
-    if(!pc){ await connect(); }
-    const wait = () => new Promise(res => { const t0 = Date.now(); (function poll(){ if(state === 'ready' || state === 'error' || Date.now() - t0 > 8000) res(); else setTimeout(poll, 100); })(); });
-    await wait();
-    if(!dc || dc.readyState !== 'open') return;
-    caption('user', 'Tú: ' + text, true);
-    if(tools) tools.noteUserTurn();
-    send({ type:'conversation.item.create', item:{ type:'message', role:'user', content:[{ type:'input_text', text }] } });
-    send({ type:'response.create' });
-  }
-
-  function pickFemaleEsVoice(){
+  /* ---------- Salida de voz local ---------- */
+  function pickFemaleVoice(lang){
     const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
-    const es = vs.filter(v => /^es/i.test(v.lang));
-    const fem = es.find(v => /(female|mujer|sabina|helena|paulina|monica|elena|laura|maria|dalia|salome|google espa)/i.test(v.name));
-    return fem || es[0] || null;
+    const own = vs.filter(v => new RegExp('^' + (lang === 'en' ? 'en' : 'es'), 'i').test(v.lang));
+    const rank = v => (/natural|neural|online/i.test(v.name) ? 2 : 0) + (/(female|mujer|sabina|helena|paulina|monica|elena|laura|maria|dalia|salome|zira|samantha|aria|jenny|google)/i.test(v.name) ? 1 : 0);
+    return own.slice().sort((a, b) => rank(b) - rank(a))[0] || null;
   }
-  function speakFallback(text){
+  function speakFallback(text, lang){
     if(!('speechSynthesis' in window)) return;
     if(window.ASDAudio && ASDAudio.getPrefs().muted.voz) return;
     speechSynthesis.cancel();
     const u = new SpeechSynthesisUtterance(text);
-    const v = pickFemaleEsVoice(); if(v){ u.voice = v; u.lang = v.lang; } else u.lang = 'es-CO';
-    u.rate = 1.05; u.pitch = 1.05;
+    const v = pickFemaleVoice(lang); if(v){ u.voice = v; u.lang = v.lang; } else u.lang = lang === 'en' ? 'en-US' : 'es-CO';
+    u.rate = 1.1; u.pitch = 1.05;
     speechSynthesis.speak(u);
   }
+  if('speechSynthesis' in window) speechSynthesis.getVoices();      // calienta la lista de voces
 
   function isLive(){ return !!dc && dc.readyState === 'open' && state !== 'off' && state !== 'error' && state !== 'connecting'; }
 
-  /* announce: la app informa al modelo de un evento y ella lo dice. Si no hay voz conectada, speechSynthesis. */
+  /* announce: frases fijas que la app dice sin que se las pidan (SOLO alarmas críticas y "rumbo alcanzado").
+     Nunca interrumpen al práctico: si habla o espera respuesta, se encolan. Solo una alarma crítica corta a Marina si es ELLA quien habla. */
   function announce(text, opt){
     opt = opt || {};
-    const key = opt.key || text.slice(0, 24);
+    const lang = opt.lang || lastLang;
+    const phrase = (text && typeof text === 'object') ? (text[lang] || text.es) : text;
+    if(!phrase) return;
+    const key = opt.key || String(phrase).slice(0, 24);
     const now = Date.now();
     if(opt.cooldownMs && lastAt.has(key) && now - lastAt.get(key) < opt.cooldownMs) return;
     lastAt.set(key, now);
-    if(!isLive()){ speakFallback(opt.fallbackText || text); return; }
-    if(opt.prio === 'critical'){ cancelOutput(); deliver(text, true); return; }
-    if(state === 'ready') deliver(text, false); else queue.set(key, { text, opt });
-  }
-  function deliver(text, critical){
-    send({ type:'conversation.item.create', item:{ type:'message', role:'user', content:[{ type:'input_text', text:'[EVENTO] ' + text }] } });
-    send({ type:'response.create', response:{ instructions: critical ? 'Alarma crítica: avisa de inmediato, una sola frase, tono firme.' : 'Informa en una frase corta.' } });
+    const busyUser = state === 'listening' || state === 'thinking';
+    if(busyUser && opt.prio !== 'critical'){ queue.set(key, { text: phrase, lang }); return; }
+    say(phrase, lang);
   }
   function flushQueue(){
     if(!queue.size) return;
     const [key, v] = queue.entries().next().value;
     queue.delete(key);
-    deliver(v.text, false);
+    say(v.text, v.lang);
   }
 
-  /* hablar() existente (alertas, asesoría IA) pasa a usar esta salida */
+  /* hablar() existente (alarmas de varada y UKC crítico; lectura del asesor IA que el práctico pide con el botón) */
   window.hablar = function(texto, opt){
     if(!texto) return;
-    const critical = /cr[ií]tica|encallado/i.test(texto);
-    announce(texto, Object.assign({ key:'hablar:' + texto.slice(0, 18), prio: critical ? 'critical' : 'normal' }, opt || {}));
+    const critical = /cr[ií]tica|encallado|poco profundas/i.test(texto);
+    announce(texto, Object.assign({ key:'hablar:' + texto.slice(0, 18), prio: critical ? 'critical' : 'normal', lang:'es' }, opt || {}));
   };
-
-  /* ---------- Vigilante de eventos de navegación ---------- */
-  let lastWp = null, lastUkcTier = 0;
-  setInterval(() => {
-    if(typeof estado === 'undefined' || !estado.simActiva) { if(typeof estado !== 'undefined') lastWp = estado.wpIndex; return; }
-    if(lastWp !== null && estado.wpIndex > lastWp) announce(`Waypoint ${estado.wpIndex} alcanzado. Siguiente: ${estado.wpIndex + 1}.`, { key:'wp', cooldownMs:4000 });
-    lastWp = estado.wpIndex;
-    const g = estado.guia;
-    if(g && Math.abs(g.xte) > 60) announce(`Desvío de ${Math.round(Math.abs(g.xte))} metros de la derrota.`, { key:'xte', cooldownMs:25000 });
-    const ukc = estado.nav ? estado.nav.ukc : null;
-    if(ukc !== null){
-      const tier = ukc < 1.5 ? 2 : ukc < 3 ? 1 : 0;
-      if(tier === 1 && lastUkcTier === 0) announce(`Margen bajo la quilla reducido: ${ukc.toFixed(1)} metros.`, { key:'ukc1', cooldownMs:30000 });
-      lastUkcTier = tier;
-    }
-  }, 700);
 
   /* ---------- Cableado de la interfaz ---------- */
   function wireUi(){
     tools = VoiceTools.create(SimAPI);
+    loadGrammar();
     const mic = byId('btnMic');
     if(mic){
       mic.addEventListener('pointerdown', e => { e.preventDefault(); pttStart(); });
@@ -385,14 +486,11 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
     if(yes) yes.addEventListener('click', () => {
       if(!tools) return;
       const r = tools.confirmPending(); refreshConfirmBar();
-      if(isLive()){ send({ type:'conversation.item.create', item:{ type:'message', role:'user', content:[{ type:'input_text', text:'[EVENTO] El usuario confirmó en pantalla. Resultado: ' + (r.message || r.status) }] } }); send({ type:'response.create' }); }
-      else if(typeof aviso === 'function') aviso(r.message || 'Hecho');
+      say(r.status === 'ok' ? (lastLang === 'en' ? 'Done.' : 'Hecho.') : (lastLang === 'en' ? 'Unable.' : 'No se pudo.'), lastLang);
     });
-    if(no) no.addEventListener('click', () => {
-      if(!tools) return; tools.cancelPending(); refreshConfirmBar();
-      if(isLive()){ send({ type:'conversation.item.create', item:{ type:'message', role:'user', content:[{ type:'input_text', text:'[EVENTO] El usuario canceló la acción pendiente.' }] } }); send({ type:'response.create' }); }
-    });
-    document.querySelectorAll('.phrase').forEach(b => b.addEventListener('click', () => { if(window.ASDAudio) ASDAudio.resume(); sendText(b.textContent); }));
+    if(no) no.addEventListener('click', () => { if(!tools) return; tools.cancelPending(); refreshConfirmBar(); say(lastLang === 'en' ? 'Cancelled.' : 'Cancelado.', lastLang); });
+    // la guía se genera desde la base: un solo manejador sobre el contenedor
+    ['guideEs', 'guideEn'].forEach(id => { const box = byId(id); if(box) box.addEventListener('click', e => { const b = e.target.closest('.phrase'); if(b){ if(window.ASDAudio) ASDAudio.resume(); sendText(b.textContent); } }); });
     const tEs = byId('tabGuiaEs'), tEn = byId('tabGuiaEn');
     const setGuide = es => {
       byId('guideEs').hidden = !es; byId('guideEn').hidden = es;
@@ -405,6 +503,7 @@ Modo manos libres: actúa solo si la frase empieza con "Marina"; si no, no respo
     setState('off');
   }
 
-  window.ASDVoice = { connect, disconnect, isLive, announce, sendText, setHandsFree, get state(){ return state; } };
+  window.ASDVoice = { connect, disconnect, isLive, announce, sendText, setHandsFree, pending: () => tools ? tools.getPending() : null, refreshConfirm: refreshConfirmBar,
+                      _toolCall: onToolCall, get state(){ return state; }, get tools(){ return sessionTools; }, get instructions(){ return instructions; } };
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wireUi); else wireUi();
 })();

@@ -28,55 +28,74 @@
     return pad(dd, isLat ? 2 : 3) + pad(mm, 2) + pad(ss.toFixed(1), 4) + hemi;
   }
 
+  /* Rumbo leído dígito a dígito (030 = "cero tres cero"); el modelo debe usar `spoken` tal cual. */
+  const spoken = d => { const k = ASDOrders.spokenHeading(d); return { es:k.es, en:k.en }; };
+
   /* Estado que el modelo necesita tras una orden de rumbo o máquinas. */
   function orderState(){
     const o = getOrdenes(), s = o.state;
+    const ordered = s.mode === 'heading' && s.hdgTarget != null ? s.hdgTarget : null;
     return {
-      ordered_heading: s.mode === 'heading' && s.hdgTarget != null ? Math.round(s.hdgTarget) : null,
+      ordered_heading: ordered != null ? Math.round(ordered) : null,
+      ordered_heading_spoken: ordered != null ? spoken(ordered) : null,
       engine_order: o.telegraphEntry().label,
       current_heading: Math.round(curHdg()),
+      current_heading_spoken: spoken(curHdg()),
       simulation_running: !!estado.simActiva
     };
   }
   function hint(res){
     const o = getOrdenes(), s = o.state;
-    if(s.telegraph === 'stop' && s.mode === 'heading') res.warning = 'Máquinas paradas: sin empuje el buque no gobierna. Pide una orden de máquinas.';
-    if(!estado.simActiva) res.note = 'La simulación está en pausa: la orden queda registrada y actuará al iniciar.';
+    if(o.telegraphEntry().f === 0 && s.mode === 'heading'){ res.warning = 'Máquinas paradas: sin empuje el buque no gobierna. Pide una orden de máquinas.'; res.warning_code = 'engines_stopped'; }
+    if(!estado.simActiva){ res.note = 'La simulación está en pausa: la orden queda registrada y actuará al iniciar.'; res.note_code = 'sim_paused'; }
     return res;
   }
 
-  /* Primera orden desde el mando manual: se hereda la potencia que había como orden de máquinas. */
-  function inheritEngine(){
+  /* Las órdenes de puente las da el práctico y solo él. Si el piloto automático gobierna o los propulsores están
+     inactivos (deriva libre), la orden NO se ejecuta ni cambia el modo por su cuenta: se informa y ya. */
+  function gate(){
+    if(estado.autopilot) return fail('autopilot_active', 'Piloto automático activo: no ejecuto la orden. Ordene control manual para darla.');
+    if(!estado.manual) return fail('free_drift', 'Gobierno en deriva libre: los propulsores están inactivos. Active el modo Manual para dar órdenes.');
+    return null;
+  }
+
+  /* Primera orden de rumbo o timón desde el mando manual: la potencia se mantiene tal cual, sin inventar una orden de máquinas. */
+  function holdPower(){
     const o = getOrdenes();
     if(o.isActive()) return;
-    const f = Math.max(estado.thrP, estado.thrS);
     const ahead = Math.cos(estado.azP * Math.PI / 180) >= 0;
-    o.engine(ASDOrders.fromThrust(f, ahead ? 1 : -1));
+    o.seed(Math.max(estado.thrP, estado.thrS), ahead ? 1 : -1);
   }
 
   const SimAPI = {
     /* ---------- Órdenes de puente ---------- */
     steerCourse(deg){
-      inheritEngine();
+      const g = gate(); if(g) return g;
+      holdPower();
       const info = getOrdenes().steerCourse(deg);
+      getOrdenes().state.startErr = Math.abs(ASDOrders.angDiff(deg, curHdg()));   // para el anillo de progreso
       ordenesAplicar();
-      return ok(`Rumbo ${pad3(deg)}`, hint(Object.assign(orderState(), info)));
+      return ok(`Rumbo ${spoken(deg).es}`, hint(Object.assign(orderState(), info)));
     },
     alterCourse(side, deg){
-      inheritEngine();
+      const g = gate(); if(g) return g;
+      holdPower();
       const info = getOrdenes().alterCourse(side, deg, curHdg());
+      getOrdenes().state.startErr = Math.abs(ASDOrders.angDiff(info.ordered_heading, curHdg()));
       ordenesAplicar();
-      return ok(`Cae ${Math.round(deg)} grados a ${side === 'port' ? 'babor' : 'estribor'}: nuevo rumbo ${pad3(info.ordered_heading)}`, hint(Object.assign(orderState(), info)));
+      return ok(`Cae ${Math.round(deg)} grados a ${side === 'port' ? 'babor' : 'estribor'}: nuevo rumbo ${spoken(info.ordered_heading).es}`, hint(Object.assign(orderState(), info)));
     },
     helm(order, angle){
+      const g = gate(); if(g) return g;
       const yd = (typeof ship !== 'undefined' && ship) ? ship.yawDesign * 180 / Math.PI : 8;
-      inheritEngine();
+      holdPower();
       const info = getOrdenes().helm(order, angle, curHdg(), estado.yawRate * 180 / Math.PI, yd);
       ordenesAplicar();
-      const txt = info.helm_angle != null ? `Timón ${info.helm_angle < 0 ? 'a babor' : 'a estribor'} ${Math.abs(info.helm_angle)}` : `Así, rumbo ${pad3(info.ordered_heading)}`;
+      const txt = info.helm_angle != null ? `Timón ${info.helm_angle < 0 ? 'a babor' : 'a estribor'} ${Math.abs(info.helm_angle)}` : `Así, rumbo ${spoken(info.ordered_heading).es}`;
       return ok(txt, hint(Object.assign(orderState(), info)));
     },
     engine(order){
+      const g = gate(); if(g) return g;
       const entry = getOrdenes().engine(order);
       if(!entry) return fail('bad_args', 'Orden de máquinas desconocida.');
       ordenesAplicar();
@@ -154,8 +173,11 @@
       return ok('Buque ubicado');
     },
 
-    ui({ panel, visible, chart, rose, follow }){
+    ui({ panel, visible, chart, rose, follow, overview, forces, vectors }){
       const done = [];
+      if(typeof overview === 'boolean'){ setOverviewCollapsed(!overview, true); done.push(overview ? 'Vista general' : 'Vista general oculta'); }
+      if(typeof forces === 'boolean'){ setForcePanel(forces, true); layoutCorner(); done.push(forces ? 'Diagrama de fuerzas' : 'Diagrama oculto'); }
+      if(typeof vectors === 'boolean'){ VL.on = vectors; paintVecBtn(); layoutCorner(); done.push(vectors ? 'Lista de vectores' : 'Lista oculta'); }
       if(typeof follow === 'boolean'){ setFollow(follow); done.push(follow ? 'Carta centrada en el buque' : 'Seguimiento desactivado'); }
       if(panel){
         const id = panel === 'left' ? 'panelBuque' : 'panelTelemetria';
@@ -167,6 +189,23 @@
       if(chart){ setChartTab(chart); done.push(chart === 'abat' ? 'Gráfica de abatimiento' : 'Perfil batimétrico'); }
       if(rose){ toggleRosa(rose === 'open'); done.push(rose === 'open' ? 'Rosa abierta' : 'Rosa cerrada'); }
       return done.length ? ok(done.join(', ')) : fail('bad_args', 'Indica panel, gráfica, rosa o seguimiento.');
+    },
+
+    /* Informe de deriva y caída (solo lectura): sale de ASDForces con todas las fuerzas del frame actual. */
+    driftReport(){
+      const A = estado.fuerzas;
+      if(!A) return fail('no_data', 'Aún no hay fuerzas calculadas: inicia la simulación.');
+      const n = estado.nav || null, KN = 1000;
+      const sd = v => v > 0 ? 'estribor' : (v < 0 ? 'babor' : 'sin caída');
+      const end = (fall, f) => ({ transverse_speed_kn: Math.round(Math.abs(fall.knots) * 100) / 100, transverse_speed_ms: Math.round(Math.abs(fall.ms) * 100) / 100, fall_deg: r1(Math.abs(fall.deg)), side: sd(fall.deg), lateral_force_kN: r1(Math.abs(f)/KN), force_side: sd(f) });
+      return ok('Informe de deriva', {
+        leeway_deg: n ? r1(n.abat) : null, drift_deg: n ? r1(n.deriva) : null, sog_kn: n ? r1(n.sog) : null,
+        bow: end(A.fall.bow, A.ends.bow), stern: end(A.fall.stern, A.ends.stern),
+        yaw_rate_deg_s: r1(estado.yawRate * 180 / Math.PI),
+        main_cause: { bow: A.ends.cause.bow, stern: A.ends.cause.stern },
+        net_force_kN: r1(A.net.mag / KN), net_bearing_deg: Math.round(A.net.absDeg), net_bearing_spoken: spoken(A.net.absDeg), acceleration_kn_s: Math.round(A.net.accKnS*100)/100,
+        recommendation: A.rec.text, level: A.rec.level, suggestion: A.rec.suggest
+      });
     },
 
     getStatus(){
@@ -182,6 +221,11 @@
         simulation: estado.simActiva ? 'activa' : 'en pausa',
         mode: estado.autopilot ? 'piloto automático' : (o.isActive() ? 'órdenes de puente' : (estado.manual ? 'manual' : 'deriva libre')),
         heading_deg: Math.round(curHdg()),
+        heading_spoken: spoken(curHdg()),
+        ordered_heading_spoken: (o.isActive() && o.state.mode === 'heading' && o.state.hdgTarget != null) ? spoken(o.state.hdgTarget) : null,
+        cog_spoken: n ? spoken(n.cog) : null,
+        cts_spoken: g ? spoken(g.CTS) : null,
+        bearing_to_waypoint_spoken: g ? spoken(g.bearingWP) : null,
         ordered_heading_deg: (o.isActive() && o.state.mode === 'heading' && o.state.hdgTarget != null) ? Math.round(o.state.hdgTarget) : null,
         engine_order: o.isActive() ? o.telegraphEntry().label : null,
         rate_of_turn_deg_s: r1(estado.yawRate * 180 / Math.PI),
@@ -190,6 +234,7 @@
         environment: { wind_from_deg: amb.vDirFrom, wind_kn: amb.vKn, current_toward_deg: amb.cDirTo, current_kn: amb.cKn, hs_m: amb.olaHs, tide_m: amb.marea },
         route: g ? { waypoint: `${g.wpNum} de ${g.totalWp}`, distance_nm: r1(g.distWP / 1852), bearing_deg: Math.round(g.bearingWP), cts_deg: Math.round(g.CTS), cross_track_m: Math.round(g.xte) }
                  : (estado.ruta && estado.ruta.length ? `${estado.ruta.length} puntos trazados, sin guiado activo` : 'sin derrota'),
+        lateral: estado.fuerzas ? { bow_fall_deg: r1(estado.fuerzas.fall.bow.deg), stern_fall_deg: r1(estado.fuerzas.fall.stern.deg), recommendation: estado.fuerzas.rec.text } : null,
         alerts
       };
     }

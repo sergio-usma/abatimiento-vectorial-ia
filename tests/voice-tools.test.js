@@ -15,7 +15,7 @@ function fakeSim(over){
     setWind: (r) => { calls.push(['setWind', r]); return { knots: r.knots != null ? r.knots : 10 + (r.deltaKnots || 0) }; },
     setCurrent: (r) => { calls.push(['setCurrent', r]); return { knots: r.knots != null ? r.knots : 1 + (r.deltaKnots || 0) }; },
     setSea: rec('setSea'), route: rec('route'), placeVessel: rec('placeVessel'), insideChart: () => true,
-    ui: rec('ui'), getStatus: () => ({ heading_deg: 300 })
+    ui: rec('ui'), getStatus: () => ({ heading_deg: 300 }), driftReport: () => ({ status:'ok', message:'Informe de deriva', recommendation:'Sin caída significativa.' })
   }, over || {});
   return sim;
 }
@@ -182,4 +182,45 @@ test('ui admite follow y lo reenvía a la fachada', () => {
   t.execute('ui', { follow: true });
   t.execute('ui', { follow: false });
   assert.deepEqual(sim.calls, [['ui', { follow: true }], ['ui', { follow: false }]]);
+});
+
+test('drift_report es de solo lectura y no toca controles ni órdenes', () => {
+  const sim = fakeSim(); const t = VoiceTools.create(sim);
+  const r = t.execute('drift_report', {});
+  assert.equal(r.status, 'ok'); assert.match(r.recommendation, /caída/i);
+  assert.deepEqual(sim.calls, []);                       // ninguna llamada a la fachada que actúe
+  assert.ok(VoiceTools.definitions.find(d => d.name === 'drift_report'));
+});
+
+test('roles: en un turno de evento (asesor) toda herramienta de acción se rechaza sin ejecutar nada', () => {
+  const sim = fakeSim(); const t = VoiceTools.create(sim);
+  const readOnly = VoiceTools.READ_ONLY;
+  const sample = { steer_course:{ degrees:90 }, alter_course:{ side:'port', degrees:5 }, helm_order:{ order:'midships' }, engine_order:{ order:'stop' },
+    all_stop:{}, manual_control:{}, set_wind:{ knots:10 }, set_current:{ knots:1 }, set_sea:{ hs_m:1 }, set_autopilot:{ on:true },
+    sim_control:{ action:'start' }, set_sim_speed:{ speed:5 }, route:{ action:'clear' }, place_vessel:{ lat:10.4, lon:-75.5 }, ui:{ follow:true },
+    confirm_action:{ token:'x' } };
+  VoiceTools.definitions.forEach(d => {
+    if(readOnly.includes(d.name)) return;
+    const r = t.execute(d.name, sample[d.name] || {}, { origin:'event' });
+    assert.equal(r.error, 'advisor_cannot_act', d.name);
+  });
+  assert.deepEqual(sim.calls, []);                                  // nada llegó al simulador
+  assert.equal(t.getPending(), null);
+});
+
+test('roles: el asesor sí puede leer (get_status, drift_report) y el práctico puede actuar', () => {
+  const sim = fakeSim(); const t = VoiceTools.create(sim);
+  assert.equal(t.execute('get_status', {}, { origin:'event' }).status, 'ok');
+  assert.equal(t.execute('drift_report', {}, { origin:'event' }).status, 'ok');
+  assert.equal(t.execute('steer_course', { degrees:30 }, { origin:'user' }).status, 'ok');
+  assert.equal(t.execute('steer_course', { degrees:60 }).status, 'ok');   // sin contexto = turno del práctico (práctica escrita incluida)
+  assert.deepEqual(sim.calls.map(c => c[0]), ['steerCourse', 'steerCourse']);
+});
+
+test('roles: una orden rechazada del asesor no descarta una confirmación pendiente del práctico', () => {
+  const t = VoiceTools.create(fakeSim());
+  t.execute('route', { action:'clear' }, { origin:'user' });
+  assert.ok(t.getPending());
+  t.execute('engine_order', { order:'stop' }, { origin:'event' });
+  assert.ok(t.getPending());
 });

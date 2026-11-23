@@ -12,6 +12,8 @@
 <script src="vendor/leaflet.js"></script>
 <script src="vendor/chart.umd.min.js"></script>
 <script src="vendor/matter.min.js"></script>
+<script src="js/vectors.js"></script>
+<script src="js/forces.js"></script>
 <style>
   /* ---------- Fuentes locales (sin dependencia de red) ---------- */
   @font-face{font-family:"Manrope";font-style:normal;font-weight:200 800;font-display:swap;src:url("assets/fonts/manrope-latin.woff2") format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
@@ -25,11 +27,14 @@
   :root{
     color-scheme:dark;
     --bg:#050f16; --s0:#08151e; --s1:#0c1c27; --s2:#112431; --s3:#183242;
-    --surf:rgba(8,21,30,.93);
+    --surf:rgba(8,21,30,.83);   /* flotantes sobre la carta: 10 puntos más transparentes que antes (.93) */
     --line:rgba(158,205,214,.13); --line-2:rgba(158,205,214,.28);
-    --text:#e6efef; --text-2:#a7bfc4; --text-3:#84a0a8;
+    --text:#e6efef; --text-2:#a7bfc4; --text-3:#93aeb5;
     --accent:#5fd6d0; --accent-hi:#86e8e2; --accent-ink:#031c1b; --accent-soft:rgba(95,214,208,.13);
     --port:#f4948b; --stbd:#aede90; --warn:#f4c76a; --bad:#ff8077; --violet:#b9aaf0;
+    /* Lenguaje visual de vectores: UNA fuente. js/vectors.js (canvas) y este CSS leen los mismos tokens. */
+    --v-hdg:#4ade80; --v-cog:#22d3ee; --v-cts:#b48cf2; --v-wind:#e2e8f0; --v-current:#3b82f6;
+    --v-drift:#facc15; --v-route:#f97316; --v-thrust:#5fd6d0;
     --r1:6px; --r2:10px;
     --ui:'Manrope',system-ui,'Segoe UI',sans-serif;
     --mono:'DM Mono',ui-monospace,Consolas,monospace;
@@ -169,10 +174,12 @@
   .leaflet-popup-tip{background:var(--s1);}
   .leaflet-popup-content{margin:9px 12px;font-size:12px;}
 
-  #seaWaves{position:absolute;inset:0;pointer-events:none;z-index:340;opacity:.22;
+  /* Oleaje: la capa es un pliego mayor que el mapa que solo se TRASLADA (transform: lo hace el compositor, sin repintar) */
+  #seaWaves{position:absolute;inset:0;pointer-events:none;z-index:340;opacity:.22;overflow:hidden;contain:strict;}
+  #seaWaves::before{content:"";position:absolute;left:-320px;top:-320px;width:calc(100% + 640px);height:calc(100% + 640px);will-change:transform;
     background:repeating-linear-gradient(115deg,rgba(255,255,255,.10) 0 2px,transparent 2px 42px),repeating-linear-gradient(115deg,rgba(255,178,58,.24) 0 3px,transparent 3px 58px);
-    background-size:250% 250%;animation:seaDrift 7s linear infinite;mix-blend-mode:screen;}
-  @keyframes seaDrift{from{background-position:0 0,0 0;}to{background-position:420px 240px,-320px 280px;}}
+    animation:seaDrift 7s linear infinite;}
+  @keyframes seaDrift{from{transform:translate3d(0,0,0);}to{transform:translate3d(210px,120px,0);}}
   #currentFlowCanvas{position:absolute;inset:0;pointer-events:none;z-index:350;}
 
   .ship-hull{filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));transform-origin:50% 50%;}
@@ -185,30 +192,81 @@
 
   .float{position:absolute;z-index:600;background:var(--surf);border:1px solid var(--line-2);border-radius:var(--r2);box-shadow:0 10px 28px rgba(0,0,0,.4);}
 
-  /* Brújula HUD */
-  #gameCompass{top:12px;left:50%;transform:translateX(-50%);width:min(340px,calc(100% - 190px));min-width:220px;padding:8px 12px 10px;display:flex;flex-direction:column;align-items:center;gap:4px;z-index:650;}
-  #compassCanvas{display:block;width:100%;height:46px;}
-  .compass-readout{display:flex;gap:16px;font:500 13px var(--mono);font-variant-numeric:tabular-nums;color:var(--text-3);}
+  /* Brújula HUD: solo cinta y lecturas (el resto vive en #bridgeFeed). */
+  #gameCompass{top:12px;left:calc(50% + var(--compass-shift,0px));transform:translateX(-50%);width:min(340px,calc(100% - 190px));min-width:220px;padding:6px 12px 8px;display:flex;flex-direction:column;align-items:center;gap:2px;z-index:650;}
+  #compassCanvas{display:block;width:100%;height:42px;}
+  .compass-readout{display:flex;flex-wrap:nowrap;gap:10px;font:500 12px var(--mono);font-variant-numeric:tabular-nums;color:var(--text-3);white-space:nowrap;}
   .compass-readout b{font-weight:500;}
-  .compass-readout .hdg b{color:var(--stbd);} .compass-readout .cog b{color:var(--accent);} .compass-readout .cts b{color:var(--violet);}
-  #correctionBanner{width:100%;padding:3px 8px;border-radius:var(--r1);text-align:center;font-size:12px;font-weight:800;letter-spacing:.02em;}
+  .compass-readout .hdg b{color:var(--v-hdg);} .compass-readout .cog b{color:var(--v-cog);} .compass-readout .cts b{color:var(--v-cts);}
+  .dotv{display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:var(--dot,var(--text-3));vertical-align:1px;}
+  .compass-readout .hdg{--dot:var(--v-hdg);} .compass-readout .cog{--dot:var(--v-cog);} .compass-readout .cts{--dot:var(--v-cts);} .compass-readout .sog{--dot:var(--v-cog);}
+  .compass-readout [hidden]{display:none;}
+  .compass-readout .sog b{font-size:14px;font-weight:700;color:var(--v-cog);}
+  @keyframes pulse{50%{opacity:.55;}}
+
+  /* Panel de puente: guía, orden, voz y confirmación. Solo existe cuando hay algo que mostrar. */
+  #bridgeFeed{right:var(--feed-r,62px);bottom:var(--feed-b,12px);width:var(--feed-w,236px);max-height:var(--feed-maxh,260px);z-index:640;display:flex;flex-direction:column;gap:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;}
+  #bridgeFeed[hidden]{display:none;}
+  #bridgeFeed.enter{animation:feedIn .22s var(--ease);}
+  @keyframes feedIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  #bridgeFeed[data-mode="top"]{top:var(--feed-top,96px);left:12px;right:12px;bottom:auto;width:auto;}
+  .feed-sec{display:flex;flex-direction:column;gap:5px;padding:9px 11px;}
+  .feed-sec[hidden]{display:none;}
+  .feed-sec+.feed-sec,.feed-sec+#confirmBar{border-top:1px solid var(--line);}
+  #correctionBanner{padding:4px 8px;border-radius:var(--r1);text-align:center;font-size:13px;font-weight:800;letter-spacing:.02em;}
   #correctionBanner.ok{color:var(--stbd);background:rgba(174,222,144,.12);}
   #correctionBanner.mid{color:var(--warn);background:rgba(244,199,106,.13);}
   #correctionBanner.high{color:var(--bad);background:rgba(255,128,119,.15);animation:pulse 1.1s ease-in-out infinite;}
-  #correctionBanner.idle{color:var(--text-3);background:transparent;font-weight:600;font-size:11px;padding:0;}
-  #gameCompass:has(#correctionBanner.idle) #xteBarWrap{display:none;}
-  @keyframes pulse{50%{opacity:.55;}}
-  #wpBadge{font-size:12px;color:var(--warn);text-align:center;line-height:1.3;}
-  #orderBadge{padding:2px 10px;border:1px solid rgba(95,214,208,.35);border-radius:999px;background:var(--accent-soft);color:var(--accent);font:500 12px var(--mono);text-align:center;}
-  #orderBadge[hidden]{display:none;}
+  #correctionBanner.idle{color:var(--text-3);background:transparent;font-weight:600;font-size:12px;padding:0;}
+  .feed-guide:has(#correctionBanner.idle) #xteBarWrap{display:none;}
+  #wpBadge{font:500 12px var(--mono);color:var(--v-route);text-align:center;line-height:1.3;}
   #xteBarWrap{position:relative;width:100%;height:6px;background:var(--s0);border:1px solid var(--line);border-radius:3px;overflow:hidden;}
   #xteBarWrap::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--line-2);}
   #xteBarFill{position:absolute;top:0;bottom:0;left:50%;width:3px;background:var(--accent);transition:left .1s linear;}
+  .feed-order{flex-direction:row;align-items:center;gap:10px;}
+  .ord-body{display:flex;flex-direction:column;gap:2px;min-width:0;}
+  .ord-k{font:800 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);}
+  #orderBadge{font:500 13px/1.3 var(--mono);color:var(--v-cts);white-space:normal;overflow-wrap:anywhere;}
+  #orderBadge[hidden]{display:none;}
+  .ring{position:relative;flex:none;width:40px;height:40px;display:grid;place-items:center;}
+  .ring svg{position:absolute;inset:0;width:100%;height:100%;}
+  .ring-bg{fill:none;stroke:var(--line-2);stroke-width:3;}
+  .ring-fg{fill:none;stroke:var(--v-cts);stroke-width:3;stroke-linecap:round;stroke-dasharray:94.25;stroke-dashoffset:94.25;transition:stroke-dashoffset .25s linear;}
+  .ring-txt{font:500 11px var(--mono);color:var(--text);}
+  .ring-ok{display:none;fill:none;stroke:var(--stbd);stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;inset:9px !important;width:22px !important;height:22px !important;}
+  .ring[data-state="done"] .ring-ok{display:block;}
+  .ring[data-state="done"] .ring-fg{stroke:var(--stbd);}
+  .ring[data-state="rate"] .ring-fg{stroke-dashoffset:60;stroke-dasharray:24 70;animation:spin 1.6s linear infinite;transform-origin:50% 50%;}
+  @keyframes spin{to{transform:rotate(270deg);}}
+  .ring-sm{width:30px;height:30px;}
+  .ring-sm .ring-fg{stroke:var(--bad);}
+  .voice-head{display:flex;align-items:center;gap:9px;}
+  .avatar{position:relative;display:grid;place-items:center;flex:none;width:34px;height:34px;border-radius:50%;background:var(--s2);border:1px solid var(--line-2);color:var(--text);}
+  .avatar b{font:800 14px var(--ui);}
+  .avatar[data-state="listening"]{border-color:var(--accent);}
+  .avatar[data-state="thinking"]{border-color:var(--warn);}
+  .avatar[data-state="speaking"]{border-color:var(--stbd);}
+  .eq{position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);display:flex;align-items:flex-end;gap:2px;height:12px;padding:1px 3px;background:var(--s1);border-radius:6px;}
+  .eq i{display:block;width:2px;height:3px;border-radius:1px;background:var(--text-3);}
+  .avatar[data-state="listening"] .eq i{background:var(--accent);animation:eq 1s ease-in-out infinite;}
+  .avatar[data-state="speaking"] .eq i{background:var(--stbd);animation:eq .7s ease-in-out infinite;}
+  .avatar[data-state="thinking"] .eq i{background:var(--warn);animation:eq 1.3s ease-in-out infinite;}
+  .eq i:nth-child(2){animation-delay:.12s !important;} .eq i:nth-child(3){animation-delay:.26s !important;} .eq i:nth-child(4){animation-delay:.07s !important;}
+  @keyframes eq{0%,100%{height:3px;}50%{height:10px;}}
+  .voice-name{display:flex;flex-direction:column;font:800 13px var(--ui);line-height:1.2;}
+  .voice-state{font:600 11px var(--ui);color:var(--text-3);}
+  .legend-glyph{flex:none;}
+  .legend-note{margin-top:8px;font-size:12px;line-height:1.45;color:var(--text-3);}
+  .row[data-v]>span:first-child::before{content:"";display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:var(--dot);vertical-align:0;}
+  .row[data-v="hdg"]{--dot:var(--v-hdg);} .row[data-v="cog"]{--dot:var(--v-cog);} .row[data-v="drift"]{--dot:var(--v-drift);}
+  .row[data-v="wind"]{--dot:var(--v-wind);} .row[data-v="port"]{--dot:var(--port);} .row[data-v="starboard"]{--dot:var(--stbd);}
+  .sw[data-v="current"]{background:var(--v-current);} .sw[data-v="port"]{background:var(--port);} .sw[data-v="starboard"]{background:var(--stbd);} .sw[data-v="thrust"]{background:var(--v-thrust);} .sw[data-v="wind"]{background:var(--v-wind);}
+  #vectorCanvas{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:590;}
 
   /* Rosa de los vientos */
   #rosaVientos{position:absolute;z-index:900;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:rgba(8,21,30,.78);border:1px solid var(--line-2);border-radius:50%;}
   /* Esquina inferior izquierda: la rosa va justo encima del cursor (cursor = 50 px de alto + 8 px de aire). */
-  #rosaVientos.mini{left:12px;bottom:calc(var(--lift,0px) + 70px);width:var(--stack-w,190px);height:var(--stack-w,190px);box-shadow:0 6px 18px rgba(0,0,0,.4);}
+  #rosaVientos.mini{left:12px;bottom:calc(var(--lift,0px) + 70px);width:var(--stack-w,190px);height:var(--stack-w,190px);box-shadow:0 6px 18px rgba(0,0,0,.4);opacity:.9;}
   #rosaVientos.mini:hover{border-color:var(--accent);}
   #rosaVientos.expandida{top:50%;left:50%;transform:translate(-50%,-50%);width:340px;height:340px;background:rgba(8,21,30,.82);box-shadow:0 24px 60px rgba(0,0,0,.6);cursor:default;}
   #rosaVientos.mini #rosaCerrar,#rosaVientos.mini #rosaReadout,#rosaVientos.mini #rosaZoomHint{display:none;}
@@ -219,21 +277,35 @@
   #rosaZoomHint{position:absolute;bottom:8px;font-size:11px;color:var(--text-3);pointer-events:none;}
 
   /* Fuerzas */
-  #forceDiagram{top:56px;left:12px;width:196px;max-height:var(--fd-max,none);overflow:hidden;display:flex;flex-direction:column;}
-  #forceDiagram[hidden],#forceDiagram.tiny{display:none;}
-  #forceDiagram.compact .fd-readout{display:none;}
+  /* Columna arriba a la izquierda: diagrama de fuerzas y, debajo, la lista de valores de los vectores. */
+  #forceStack{position:absolute;top:12px;left:12px;width:196px;z-index:640;display:flex;flex-direction:column;gap:8px;max-height:var(--fd-max,none);pointer-events:none;}
+  #forceStack>.float{position:relative;z-index:auto;pointer-events:auto;width:100%;}
+  #forceStack>[hidden],#forceDiagram.tiny{display:none;}
+  #forceStack:not(:has(>:not([hidden]))){display:none;}
+  #forceDiagram{display:flex;flex-direction:column;min-height:0;overflow:hidden;flex:0 1 auto;}
+  #forceDiagram.compact .row.opt,#forceDiagram.compact .fd-note,#forceDiagram.compact .fd-scale{display:none;}
   #forceDiagram .fd-body{overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;}
   .fd-title{display:flex;align-items:center;min-height:30px;padding:0 12px;font:800 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);}
   .fd-body{padding:0 10px 10px;}
   #forceDiagramCanvas{display:block;width:174px;height:150px;margin:0 auto 6px;}
-  .fd-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 10px;margin-bottom:6px;font-size:12px;color:var(--text-2);}
+  #forceDiagram.small #forceDiagramCanvas{width:136px;height:117px;margin-bottom:4px;}
+  .fd-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:3px 9px;margin-bottom:4px;font-size:12px;color:var(--text-2);}
   .fd-legend span{display:flex;align-items:center;gap:4px;}
   .fd-legend .sw{display:inline-block;width:10px;height:3px;border-radius:2px;}
+  .fd-legend .sw.dash{height:0;background:none;border-top:2px dashed var(--v-thrust);border-radius:0;}
+  .fd-scale{margin-bottom:5px;font:500 11px var(--mono);color:var(--text-3);text-align:center;}
   .fd-readout .row{padding:4px 2px;background:transparent;border-bottom:1px solid var(--line);}
-  .fd-readout .row:last-child{border-bottom:0;}
   .fd-readout .row>span:first-child{font-size:11px;}
   .fd-readout .row>span:last-child{font-size:12px;}
   .fd-readout .net>span:last-child{color:var(--warn);}
+  .fd-readout .row.stbd>span:last-child{color:var(--stbd);} .fd-readout .row.port>span:last-child{color:var(--port);}
+  .fd-note{margin-top:6px;font-size:12px;line-height:1.4;color:var(--text-3);}
+  .vec-rows{padding:0 10px 9px;display:flex;flex-direction:column;}
+  .vrow{display:flex;align-items:baseline;gap:7px;padding:3px 0;border-bottom:1px solid var(--line);font-size:12px;}
+  .vrow:last-child{border-bottom:0;}
+  .vrow .dotv{--dot:var(--vc);flex:none;margin:0;}
+  .vrow .vn{flex:1;min-width:0;color:var(--text-3);font-weight:600;white-space:nowrap;}
+  .vrow .vv{font:500 12px var(--mono);color:var(--text);white-space:nowrap;}
 
   /* Cursor ECDIS */
   #cursorStatus{position:absolute;left:12px;bottom:calc(var(--lift,0px) + 12px);z-index:700;width:var(--stack-w,190px);display:flex;flex-direction:column;gap:2px;padding:6px 10px;background:var(--surf);border:1px solid var(--line-2);border-radius:var(--r1);font:500 12px var(--mono);white-space:nowrap;pointer-events:none;}
@@ -296,11 +368,11 @@
   #btnMic[data-state="thinking"]{color:var(--warn);border-color:rgba(244,199,106,.5);}
   #btnMic[data-state="speaking"]{color:var(--stbd);border-color:rgba(174,222,144,.5);background:rgba(174,222,144,.1);}
   #btnMic[data-state="error"]{color:var(--bad);border-color:rgba(255,128,119,.5);}
-  #voiceCaption{display:flex;flex-direction:column;gap:2px;width:100%;margin-top:2px;font-size:12px;line-height:1.35;}
+  #voiceCaption{display:flex;flex-direction:column;gap:3px;font-size:12px;line-height:1.35;}
   #voiceCaption[hidden],#confirmBar[hidden]{display:none;}
-  .cap-line{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
-  .cap-user{color:var(--text-2);} .cap-bot{color:var(--accent);} .cap-err{color:var(--bad);}
-  #confirmBar{display:flex;align-items:center;gap:6px;width:100%;margin-top:2px;padding:6px;background:rgba(255,128,119,.08);border:1px solid rgba(255,128,119,.35);border-radius:var(--r1);font-size:12px;font-weight:700;}
+  .cap-line{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;padding:4px 8px;border-radius:var(--r1);background:var(--s0);}
+  .cap-user{color:var(--text-2);} .cap-bot{color:var(--text);border-left:0;background:var(--s2);} .cap-err{color:var(--bad);}
+  #confirmBar{display:flex;align-items:center;gap:8px;padding:9px 11px;background:rgba(255,128,119,.07);font-size:12px;font-weight:700;}
   #confirmText{flex:1;min-width:0;}
   #confirmBar .btn{min-height:28px;padding:0 10px;}
   .hint{font-size:12px;color:var(--text-3);}
@@ -323,11 +395,7 @@
   #northArrow .na-head{fill:var(--text);}
   #northArrow .na-tail{fill:var(--text-3);opacity:.55;}
   #northArrow .na-n{fill:var(--accent);font:800 11px var(--mono);}
-  /* Botón suelto sobre la carta (diagrama de fuerzas) y barra de herramientas (zoom, seguir, vista general). */
-  .map-btn{position:absolute;z-index:650;left:12px;top:12px;display:grid;place-items:center;width:36px;height:36px;padding:0;background:var(--surf);border:1px solid var(--line-2);border-radius:var(--r1);color:var(--text-2);cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4);transition:background .15s,color .15s,border-color .15s;}
-  .map-btn:hover:not(:disabled){background:var(--s3);color:var(--text);}
-  .map-btn[aria-pressed="true"]{color:var(--accent);background:var(--s1);border-color:rgba(95,214,208,.5);}
-  .map-btn:disabled{opacity:.4;cursor:default;}
+  /* Barra de herramientas de la carta: zoom, seguir, vista general y diagrama de fuerzas. */
   #mapTools{right:12px;bottom:calc(var(--lift-r,0px) + 12px);z-index:700;display:flex;flex-direction:column;width:38px;overflow:hidden;border-radius:var(--r2);}
   .tool{display:grid;place-items:center;flex:none;width:36px;height:36px;padding:0;border:0;background:transparent;color:var(--text-2);cursor:pointer;transition:background .15s,color .15s;}
   .tool:hover:not(:disabled){background:var(--s3);color:var(--text);}
@@ -335,8 +403,8 @@
   .tool[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft);}
   .tool:focus-visible{outline-offset:-3px;}
   .tool-sep{display:block;flex:none;height:1px;margin:3px 7px;background:var(--line-2);}
-  @media (pointer:coarse){ .tool{width:44px;height:44px;} #mapTools{width:46px;} .map-btn{width:44px;height:44px;} }
-  #overview{top:76px;right:12px;width:200px;z-index:700;overflow:hidden;}
+  @media (pointer:coarse){ .tool{width:44px;height:44px;} #mapTools{width:46px;} }
+  #overview{top:76px;right:12px;width:200px;z-index:700;overflow:hidden;opacity:.9;}
   .ov-head{display:flex;align-items:center;gap:6px;height:30px;padding:0 6px 0 10px;border-bottom:1px solid var(--line);}
   .ov-title{margin-right:auto;font:800 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);white-space:nowrap;}
   .ov-chip{height:22px;padding:0 9px;border:1px solid var(--line-2);border-radius:999px;background:var(--s0);color:var(--text-2);font:700 11px var(--ui);cursor:pointer;}
@@ -365,10 +433,10 @@
     .unit-body{gap:6px;}
   }
   @container map (max-width:900px){
-    #gameCompass{width:min(340px,max(220px,calc(100% - 440px)));}
+    #gameCompass{width:min(340px,max(256px,calc(100% - 424px)));}
   }
   @container map (max-width:600px){
-    #forceDiagram{display:none;}
+    #forceStack{display:none;}
   }
   @container map (max-width:480px){
     #simDock{grid-template-columns:auto 88px auto;gap:6px;padding:8px;}
@@ -376,6 +444,7 @@
     .unit-read span{min-width:44px;padding:2px 4px;font-size:12px;}
     .mode-actions .btn{font-size:11px;padding:0 3px;}
     #gameCompass{width:calc(100% - 156px);min-width:0;}
+    .compass-readout{font-size:11px;gap:8px;} .dotv{margin-right:3px;}
   }
   @media (max-width:1100px){
     :root{--pl:256px;--pr:268px;}
@@ -396,7 +465,8 @@
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{transition-duration:.01ms !important;}
     #seaWaves{animation:none;}
-    #correctionBanner.high,.shallow-warning,#btnMic[data-state="listening"]{animation:none;}
+    #correctionBanner.high,.shallow-warning,#btnMic[data-state="listening"],#bridgeFeed.enter,.ring[data-state="rate"] .ring-fg,.eq i{animation:none !important;}
+    .eq i{height:6px !important;}
   }
 </style>
 </head>
@@ -425,6 +495,7 @@
     <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></symbol>
     <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
     <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01"/></symbol>
     <symbol id="i-vectors" viewBox="0 0 24 24"><path d="M12 13V4M9 7l3-3 3 3M12 13l6.5 5M19.5 14v4.5H15M12 13l-6.5 5M4.5 14v4.5H9"/></symbol>
   </defs>
 </svg>
@@ -535,9 +606,10 @@
       <div class="group-body">
         <label class="field"><span class="lbl">Clave de OpenAI (solo esta pestaña)</span><span class="inp"><input type="password" id="openaiKey" placeholder="sk-…" autocomplete="off" spellcheck="false"></span></label>
         <label class="check"><input type="checkbox" id="handsFree"><span>Manos libres (di "Marina…")</span></label>
+        <label class="check"><input type="checkbox" id="voiceNatural"><span>Voz natural de OpenAI (más lenta)</span></label>
         <form id="cmdForm" class="actions2" autocomplete="off">
-          <span class="inp"><input type="text" id="cmdText" placeholder="Escribe una orden…" aria-label="Escribir una orden" spellcheck="false"></span>
-          <button class="btn icon-only" type="submit" aria-label="Enviar orden" title="Enviar orden"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg></button>
+          <span class="inp"><input type="text" id="cmdText" placeholder="Práctica sin voz: escribe una orden…" aria-label="Práctica sin voz: escribir una orden" spellcheck="false"></span>
+          <button class="btn icon-only" type="submit" aria-label="Enviar orden de práctica" title="Enviar orden de práctica (sin voz)"><svg class="i" aria-hidden="true"><use href="#i-send"/></svg></button>
         </form>
         <div class="actions2">
           <button class="btn" id="btnIA" type="button" onclick="consultarAsesorIA()"><svg class="i" aria-hidden="true"><use href="#i-spark"/></svg>Analizar derrota</button>
@@ -559,7 +631,6 @@
         <text class="na-n" x="28" y="10.5" text-anchor="middle">N</text>
       </svg>
     </div>
-    <button class="map-btn" id="btnForce" type="button" aria-pressed="false" aria-controls="forceDiagram" aria-label="Mostrar diagrama de fuerzas" title="Mostrar diagrama de fuerzas"><svg class="i" aria-hidden="true"><use href="#i-vectors"/></svg></button>
     <section id="overview" class="float" aria-label="Vista general" hidden>
       <div class="ov-head">
         <span class="ov-title">Vista general</span>
@@ -573,8 +644,11 @@
       <span class="tool-sep" role="separator"></span>
       <button class="tool" id="btnCenter" type="button" aria-pressed="true" aria-label="Centrar y seguir al buque" title="Siguiendo al buque"><svg class="i" aria-hidden="true"><use href="#i-locate"/></svg></button>
       <button class="tool" id="ovToggle" type="button" aria-pressed="true" aria-controls="overview" aria-label="Ocultar vista general" title="Ocultar vista general"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg></button>
+      <button class="tool" id="btnForce" type="button" aria-pressed="false" aria-controls="forceDiagram" aria-label="Mostrar diagrama de fuerzas" title="Mostrar diagrama de fuerzas"><svg class="i" aria-hidden="true"><use href="#i-vectors"/></svg></button>
+      <button class="tool" id="btnVec" type="button" aria-pressed="true" aria-controls="vectorList" aria-label="Ocultar lista de vectores" title="Ocultar lista de vectores"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg></button>
     </div>
     <canvas id="currentFlowCanvas" aria-hidden="true"></canvas>
+    <canvas id="vectorCanvas" aria-hidden="true"></canvas>
     <div id="cursorStatus" aria-live="off" title="Posición del cursor en la carta">
       <span class="cs-row"><span class="cs-k">LAT</span><span class="cs-v" id="cursorLat">—</span></span>
       <span class="cs-row"><span class="cs-k">LON</span><span class="cs-v" id="cursorLon">—</span></span>
@@ -586,42 +660,75 @@
       <div id="rosaZoomHint">Rueda: zoom</div>
     </div>
     <div id="gameCompass" class="float">
-      <canvas id="compassCanvas" width="290" height="46" role="img" aria-label="Cinta de rumbo"></canvas>
+      <canvas id="compassCanvas" width="290" height="42" role="img" aria-label="Cinta de rumbo"></canvas>
       <div class="compass-readout" aria-label="Rumbos">
-        <span class="hdg" title="Rumbo de proa">HDG <b id="hudHDG">—</b></span>
-        <span class="cog" title="Rumbo sobre el fondo">COG <b id="hudCOG">—</b></span>
-        <span class="cts" title="Rumbo a gobernar">CTS <b id="hudCTS">—</b></span>
+        <span class="hdg" title="Proa: hacia dónde apunta el buque"><i class="dotv"></i>HDG <b id="hudHDG">—</b></span>
+        <span class="cog" title="Rumbo real sobre el fondo"><i class="dotv"></i>COG <b id="hudCOG">—</b></span>
+        <span class="cts" title="Rumbo a gobernar para llegar al waypoint" hidden><i class="dotv"></i>CTS <b id="hudCTS">—</b></span>
+        <span class="sog" title="Velocidad sobre el fondo"><i class="dotv"></i>SOG <b id="hudSOG">—</b></span>
       </div>
-      <div id="correctionBanner" class="idle" aria-live="polite">Sin guiado</div>
-      <div id="wpBadge">Sin derrota</div>
-      <div id="orderBadge" hidden></div>
-      <div id="xteBarWrap" title="Desvío lateral de la derrota (babor ◀ / estribor ▶)"><div id="xteBarFill"></div></div>
-      <div id="voiceCaption" aria-live="polite" hidden></div>
+    </div>
+    <div id="bridgeFeed" class="float" aria-label="Panel de puente" hidden>
+      <section class="feed-sec feed-guide" id="feedGuide" aria-label="Guía de derrota" hidden>
+        <div id="correctionBanner" class="idle" aria-live="polite">Sin guiado</div>
+        <div id="wpBadge">Sin derrota</div>
+        <div id="xteBarWrap" title="Desvío lateral de la derrota (babor ◀ / estribor ▶)"><div id="xteBarFill"></div></div>
+      </section>
+      <section class="feed-sec feed-order" id="feedOrder" aria-label="Orden de puente activa" hidden>
+        <div class="ring" id="orderProgress" data-state="run" aria-hidden="true">
+          <svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15"/><circle class="ring-fg" id="orderRing" cx="18" cy="18" r="15" transform="rotate(-90 18 18)"/></svg>
+          <span class="ring-txt" id="orderPct"></span>
+          <svg class="ring-ok" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>
+        </div>
+        <div class="ord-body">
+          <span class="ord-k">Orden · <span id="orderState">Gobernando</span></span>
+          <div id="orderBadge" hidden></div>
+        </div>
+      </section>
+      <section class="feed-sec feed-voice" id="feedVoice" aria-label="Marina" hidden>
+        <div class="voice-head">
+          <span class="avatar" id="feedAvatar" data-state="off" aria-hidden="true"><b>M</b><span class="eq"><i></i><i></i><i></i><i></i></span></span>
+          <span class="voice-name">Marina<span id="feedVoiceState" class="voice-state"></span></span>
+        </div>
+        <div id="voiceCaption" aria-live="polite" hidden></div>
+      </section>
       <div id="confirmBar" role="alert" hidden>
+        <span class="ring ring-sm" aria-hidden="true"><svg viewBox="0 0 36 36"><circle class="ring-bg" cx="18" cy="18" r="15"/><circle class="ring-fg" id="confirmRing" cx="18" cy="18" r="15" transform="rotate(-90 18 18)"/></svg></span>
         <span id="confirmText"></span>
         <button class="btn danger" id="confirmYes" type="button">Sí</button>
         <button class="btn" id="confirmNo" type="button">No</button>
       </div>
     </div>
-    <section id="forceDiagram" class="float" aria-label="Diagrama de fuerzas" hidden>
-      <div class="fd-title">Fuerzas</div>
-      <div class="fd-body">
-        <canvas id="forceDiagramCanvas" width="174" height="150" role="img" aria-label="Diagrama de fuerzas del buque"></canvas>
-        <div class="fd-legend">
-          <span><i class="sw" style="background:#2fd4e8"></i>Babor</span>
-          <span><i class="sw" style="background:#fbbf24"></i>Estribor</span>
-          <span><i class="sw" style="background:#4ade80"></i>Neto</span>
-          <span><i class="sw" style="background:#ef4444"></i>Viento</span>
+    <div id="forceStack">
+      <section id="forceDiagram" class="float" aria-label="Diagrama de fuerzas" hidden>
+        <div class="fd-title">Fuerzas</div>
+        <div class="fd-body">
+          <canvas id="forceDiagramCanvas" width="174" height="150" role="img" aria-label="Diagrama de fuerzas: chorros de los propulsores, empuje, viento, agua, fuerza neta y velocidad transversal de proa y popa"></canvas>
+          <div class="fd-readout">
+            <div class="row opt" title="Suma vectorial de lo que hacen los dos propulsores, según el azimut y el porcentaje de cada uno"><span>Empuje</span><span id="fdThr">—</span></div>
+            <div class="row opt" data-v="thrust" title="Suma de todas las fuerzas: propulsores, viento, agua y oleaje"><span>Neta</span><span id="fdNet">—</span></div>
+            <div class="row opt" title="Aceleración resultante"><span>Acel.</span><span id="fdAcc">—</span></div>
+            <div class="row" title="Velocidad transversal de la proa sobre el fondo (banda, nudos, grados respecto a la proa)"><span>Proa</span><span id="fdBow">—</span></div>
+            <div class="row" title="Velocidad transversal de la popa sobre el fondo (banda, nudos, grados respecto a la proa)"><span>Popa</span><span id="fdStern">—</span></div>
+            <div class="row opt net"><span>M. neto</span><span id="fdTNet">—</span></div>
+          </div>
+          <div class="fd-legend">
+            <span><i class="sw" data-v="port"></i>Babor</span>
+            <span><i class="sw" data-v="starboard"></i>Estribor</span>
+            <span><i class="sw dash" data-v="thrust"></i>Empuje</span>
+            <span><i class="sw" data-v="wind"></i>Viento</span>
+            <span><i class="sw" data-v="current"></i>Agua</span>
+            <span><i class="sw" data-v="thrust"></i>Neta</span>
+          </div>
+          <div class="fd-scale" id="fdScale" title="Todas las flechas comparten la misma escala">Flecha máx. —</div>
+          <p class="fd-note">Babor y estribor: chorro de agua de cada propulsor. Triángulos: velocidad transversal de proa y popa sobre el fondo (nudos).</p>
         </div>
-        <div class="fd-readout">
-          <div class="row"><span>M. babor</span><span id="fdTP">—</span></div>
-          <div class="row"><span>M. estribor</span><span id="fdTS">—</span></div>
-          <div class="row"><span>M. viento</span><span id="fdTW">—</span></div>
-          <div class="row net"><span>M. neto</span><span id="fdTNet">—</span></div>
-          <div class="row"><span>Empuje</span><span id="fdFNet">—</span></div>
-        </div>
-      </div>
-    </section>
+      </section>
+      <section id="vectorList" class="float" aria-label="Valores de los vectores" hidden>
+        <div class="fd-title">Vectores</div>
+        <div id="vecRows" class="vec-rows"></div>
+      </section>
+    </div>
 
     <div id="simDock" class="float" role="group" aria-label="Consola de propulsores azimutales">
       <section class="thr-unit port" aria-label="Propulsor de babor">
@@ -670,12 +777,12 @@
         <div class="readouts">
           <div class="row" title="Latitud"><span>Lat</span><span id="tLat">—</span></div>
           <div class="row" title="Longitud"><span>Lon</span><span id="tLon">—</span></div>
-          <div class="row" title="Rumbo de proa"><span>HDG</span><span id="tHDG">—</span></div>
-          <div class="row" title="Rumbo sobre el fondo"><span>COG</span><span id="tCOG">—</span></div>
+          <div class="row" data-v="hdg" title="Rumbo de proa"><span>HDG</span><span id="tHDG">—</span></div>
+          <div class="row" data-v="cog" title="Rumbo sobre el fondo"><span>COG</span><span id="tCOG">—</span></div>
           <div class="row info" title="Velocidad en el agua"><span>STW</span><span id="tSTW">—</span></div>
           <div class="row info" title="Velocidad sobre el fondo"><span>SOG</span><span id="tSOG">—</span></div>
-          <div class="row" title="Abatimiento por viento"><span>Abat.</span><span id="tAbat">—</span></div>
-          <div class="row" title="Deriva total: viento + corriente"><span>Deriva</span><span id="tDeriva">—</span></div>
+          <div class="row" data-v="drift" title="Abatimiento por viento"><span>Abat.</span><span id="tAbat">—</span></div>
+          <div class="row" data-v="drift" title="Deriva total: viento + corriente"><span>Deriva</span><span id="tDeriva">—</span></div>
           <div class="row" title="Profundidad local"><span>Prof.</span><span id="tProf">—</span></div>
           <div class="row" id="rowUKC" title="Margen bajo la quilla"><span>UKC</span><span id="tUKC">—</span></div>
         </div>
@@ -686,9 +793,9 @@
       <summary><h3>Fuerzas</h3></summary>
       <div class="group-body">
         <div class="readouts one">
-          <div class="row"><span>Empuje babor</span><span id="tThrustP">—</span></div>
-          <div class="row"><span>Empuje estribor</span><span id="tThrustS">—</span></div>
-          <div class="row"><span>Viento</span><span id="tFViento">—</span></div>
+          <div class="row" data-v="port"><span>Empuje babor</span><span id="tThrustP">—</span></div>
+          <div class="row" data-v="starboard"><span>Empuje estribor</span><span id="tThrustS">—</span></div>
+          <div class="row" data-v="wind"><span>Viento</span><span id="tFViento">—</span></div>
           <div class="row"><span>Guiñada</span><span id="tYaw">—</span></div>
         </div>
       </div>
@@ -722,16 +829,9 @@
     <details class="group">
       <summary><h3>Leyenda</h3></summary>
       <div class="group-body">
-        <div class="legend">
-          <div><span class="dot" style="background:#4ade80"></span>Proa (HDG)</div>
-          <div><span class="dot" style="background:#00d4ff"></span>Real (COG)</div>
-          <div><span class="dot" style="background:#b48cf2"></span>CTS</div>
-          <div><span class="dot" style="background:#f97316"></span>Corrección</div>
-          <div><span class="dot" style="background:#ef4444"></span>Viento</div>
-          <div><span class="dot" style="background:#a78bfa"></span>Corriente</div>
-          <div><span class="dot" style="background:#f97316"></span>Derrota</div>
-          <div class="full">Sondeo 12<sub>5</sub> = 12,5 m (notación ENC)</div>
-        </div>
+        <div class="legend" id="legendList"></div>
+        <p class="legend-note">Cada flecha del mapa lleva su etiqueta. El largo del COG crece con la velocidad.</p>
+        <p class="legend-note">Sondeo 12<sub>5</sub> = 12,5 m (notación ENC)</p>
       </div>
     </details>
 
@@ -742,65 +842,10 @@
           <button class="tab" id="tabGuiaEs" type="button" role="tab" aria-selected="true" aria-controls="guideEs">Español</button>
           <button class="tab" id="tabGuiaEn" type="button" role="tab" aria-selected="false" aria-controls="guideEn">English</button>
         </div>
-        <p class="hint">Pulsa una frase para enviarla como orden, o dila con <kbd>V</kbd>. Rumbos de tres dígitos: "cero nueve cero".</p>
-        <div class="guide" id="guideEs" role="tabpanel" aria-labelledby="tabGuiaEs">
-          <h4>Rumbo</h4>
-          <button class="phrase" type="button">Navega con rumbo 090</button>
-          <button class="phrase" type="button">Así, rumbo 000</button>
-          <button class="phrase" type="button">Cae 5 grados a babor</button>
-          <button class="phrase" type="button">Cae 5 grados a estribor</button>
-          <h4>Timón</h4>
-          <button class="phrase" type="button">Diez a babor</button>
-          <button class="phrase" type="button">Todo a estribor</button>
-          <button class="phrase" type="button">Timón a la vía</button>
-          <h4>Máquinas</h4>
-          <button class="phrase" type="button">Full avante</button>
-          <button class="phrase" type="button">Media avante</button>
-          <button class="phrase" type="button">Poca avante</button>
-          <button class="phrase" type="button">Muy poca avante</button>
-          <button class="phrase" type="button">Poca atrás</button>
-          <button class="phrase" type="button">Para máquinas</button>
-          <h4>Ambiente</h4>
-          <button class="phrase" type="button">Aumenta viento a 40 nudos por el Este</button>
-          <button class="phrase" type="button">Viento por el 045, 25 nudos</button>
-          <button class="phrase" type="button">Incrementa corriente 1 nudo por el 003</button>
-          <button class="phrase" type="button">Mar de un metro</button>
-          <h4>Sistema</h4>
-          <button class="phrase" type="button">Control manual</button>
-          <button class="phrase" type="button">Sigue la derrota</button>
-          <button class="phrase" type="button">Informa el estado</button>
-          <button class="phrase" type="button">Centra el buque</button>
-        </div>
-        <div class="guide" id="guideEn" role="tabpanel" aria-labelledby="tabGuiaEn" hidden>
-          <h4>Course</h4>
-          <button class="phrase" type="button">Steer course 090</button>
-          <button class="phrase" type="button">Steady on 000</button>
-          <button class="phrase" type="button">Alter course 5 degrees to port</button>
-          <button class="phrase" type="button">Alter course 5 degrees to starboard</button>
-          <h4>Helm</h4>
-          <button class="phrase" type="button">Port ten</button>
-          <button class="phrase" type="button">Hard to starboard</button>
-          <button class="phrase" type="button">Midships</button>
-          <button class="phrase" type="button">Steady</button>
-          <h4>Engines</h4>
-          <button class="phrase" type="button">Full ahead</button>
-          <button class="phrase" type="button">Half ahead</button>
-          <button class="phrase" type="button">Slow ahead</button>
-          <button class="phrase" type="button">Dead slow ahead</button>
-          <button class="phrase" type="button">Slow astern</button>
-          <button class="phrase" type="button">Stop engines</button>
-          <h4>Environment</h4>
-          <button class="phrase" type="button">Increase wind to 40 knots from the east</button>
-          <button class="phrase" type="button">Wind from 045, 25 knots</button>
-          <button class="phrase" type="button">Increase current 1 knot from 003</button>
-          <button class="phrase" type="button">Sea state one meter</button>
-          <h4>System</h4>
-          <button class="phrase" type="button">Take the con</button>
-          <button class="phrase" type="button">Follow the route</button>
-          <button class="phrase" type="button">Report status</button>
-          <button class="phrase" type="button">Center on ship</button>
-        </div>
-        <p class="hint">Basada en las IMO SMCP y las órdenes estándar de timón.</p>
+        <p class="hint">Las órdenes se dan hablando (<kbd>V</kbd>). Pulsar una frase es práctica sin voz. Rumbos dígito a dígito: "cero nueve cero".</p>
+        <div class="guide" id="guideEs" role="tabpanel" aria-labelledby="tabGuiaEs"></div>
+        <div class="guide" id="guideEn" role="tabpanel" aria-labelledby="tabGuiaEn" hidden></div>
+        <p class="hint">Generada de data/bridge-commands.json (IMO SMCP y órdenes estándar de timón y máquinas): Marina solo ejecuta lo que está aquí.</p>
       </div>
     </details>
   </aside>
@@ -1061,16 +1106,33 @@ function inicializarFisica(lat, lon){
   Matter.Body.setVelocity(shipBody, {x:0, y:0});
 }
 
+/* Rendimiento: getElementById memorizado y escritura de texto solo si cambió (cada escritura invalida estilo y layout). */
+const _byId = {};
+function $id(id){ return _byId[id] || (_byId[id] = document.getElementById(id)); }
+function setText(el, t){ if(el.__t !== t){ el.__t = t; el.textContent = t; } }
+function setCls(el, c){ if(el.__c !== c){ el.__c = c; el.className = c; } }
+/* Limitador por clave: devuelve true como máximo cada `ms` milisegundos. */
+const _gov = {};
+function every(key, ms, t){ if(t - (_gov[key] || -1e9) < ms) return false; _gov[key] = t; return true; }
+
+/* El ambiente se lee del DOM como mucho cada 40 ms (y al instante tras cualquier cambio de un campo): antes se leía
+   unas 13 veces por frame. Los valores cambian por input del usuario o por la corriente ligada al viento. */
+let _amb = null, _ambT = 0;
 function leerAmbiente(){
-  return {
-    vDirFrom: parseFloat(document.getElementById('vDir').value)||0,
-    vKn: parseFloat(document.getElementById('vFuerza').value)||0,
-    cDirTo: parseFloat(document.getElementById('cDir').value)||0,
-    cKn: parseFloat(document.getElementById('cFuerza').value)||0,
-    marea: parseFloat(document.getElementById('marea').value)||0,
-    olaHs: Math.max(0, parseFloat(document.getElementById('olaHs').value)||0),
+  const t = performance.now();
+  if(_amb && t - _ambT < 40) return _amb;
+  _ambT = t;
+  return _amb = {
+    vDirFrom: parseFloat($id('vDir').value)||0,
+    vKn: parseFloat($id('vFuerza').value)||0,
+    cDirTo: parseFloat($id('cDir').value)||0,
+    cKn: parseFloat($id('cFuerza').value)||0,
+    marea: parseFloat($id('marea').value)||0,
+    olaHs: Math.max(0, parseFloat($id('olaHs').value)||0),
   };
 }
+document.addEventListener('input', ()=>{ _amb = null; }, true);
+document.addEventListener('change', ()=>{ _amb = null; }, true);
 
 // --- Corriente superficial ligada al viento (deriva de Ekman simplificada) ---
 // Regla práctica de oceanografía: la deriva superficial inducida por el
@@ -1144,13 +1206,20 @@ function initRosaZoom(){
     el.style.width = size+'px'; el.style.height = size+'px';
   }, {passive:false});
 }
+let rosaS = 0;
+(function(){
+  const c = document.getElementById('rosaCanvas'); if(!c) return;
+  const upd = ()=>{ rosaS = Math.round(c.clientWidth); };
+  if(window.ResizeObserver) new ResizeObserver(upd).observe(c); else window.addEventListener('resize', upd);
+  upd(); setTimeout(upd, 300);
+})();
 function dibujarRosaVientos(){
   /* RADAR de rumbos (norte arriba, como la carta): barrido giratorio con estela, onda que se expande desde el buque,
      anillos de distancia y bisel graduado. Sobre él: línea de proa (HDG), rumbo real (COG), y las marcas de viento y corriente.
      No dibuja blancos: solo muestra datos reales del simulador. */
-  const canvas = document.getElementById('rosaCanvas');
+  const canvas = $id('rosaCanvas');
   if(!canvas) return;
-  const S = Math.round(canvas.clientWidth);
+  const S = rosaS;                       // lado en caché (ResizeObserver): clientWidth cada frame forzaba un layout
   if(!S) return;
   const dpr = Math.min(3, window.devicePixelRatio || 1), px = Math.round(S*dpr);
   if(canvas.width !== px){ canvas.width = px; canvas.height = px; }
@@ -1233,18 +1302,18 @@ function dibujarRosaVientos(){
     ctx.lineTo(base.x + Math.cos(ang-Math.PI/2)*w, base.y + Math.sin(ang-Math.PI/2)*w);
     ctx.closePath(); ctx.fill();
   }
-  if(amb.vKn > 0) marca(amb.vDirFrom, '#ef4444', false);
-  if(amb.cKn > 0) marca(amb.cDirTo, '#a78bfa', true);
+  if(amb.vKn > 0) marca(amb.vDirFrom, VCOL.wind, false);
+  if(amb.cKn > 0) marca(amb.cDirTo, VCOL.current, true);
 
   // --- Línea de proa (HDG), rumbo real (COG) y buque ---
   const hdgDeg = estado.ultimoHDG!=null ? estado.ultimoHDG : norm360(estado.heading*R2D);
   const cogDeg = estado.ultimoCOG!=null ? estado.ultimoCOG : hdgDeg;
   const pc = pol(cogDeg, R*0.78);
   ctx.save(); ctx.setLineDash([5,4]);
-  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(pc.x,pc.y); ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(pc.x,pc.y); ctx.strokeStyle = VCOL.cog; ctx.lineWidth = 1.6; ctx.stroke();
   ctx.restore();
   const ph = pol(hdgDeg, R-2);
-  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ph.x,ph.y); ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ph.x,ph.y); ctx.strokeStyle = VCOL.hdg; ctx.lineWidth = 2; ctx.stroke();
   // buque propio
   const hs = detalle ? 8 : 6;
   const b1 = pol(hdgDeg, hs*1.5), b2 = pol(hdgDeg+150, hs), b3 = pol(hdgDeg-150, hs);
@@ -1253,9 +1322,9 @@ function dibujarRosaVientos(){
 
   if(detalle){
     const contraHdg = norm360(hdgDeg+180), contraCog = norm360(cogDeg+180);
-    document.getElementById('rosaReadout').innerHTML =
-      `<span style="color:#4ade80">HDG ${String(Math.round(hdgDeg)).padStart(3,'0')}° · contrarumbo ${String(Math.round(contraHdg)).padStart(3,'0')}°</span><br>`+
-      `<span style="color:#00d4ff">COG ${String(Math.round(cogDeg)).padStart(3,'0')}° · contrarumbo ${String(Math.round(contraCog)).padStart(3,'0')}°</span>`;
+    const html = `<span style="color:${VCOL.hdg}">HDG ${String(Math.round(hdgDeg)).padStart(3,'0')}° · contrarumbo ${String(Math.round(contraHdg)).padStart(3,'0')}°</span><br>`+
+      `<span style="color:${VCOL.cog}">COG ${String(Math.round(cogDeg)).padStart(3,'0')}° · contrarumbo ${String(Math.round(contraCog)).padStart(3,'0')}°</span>`;
+    const ro = $id('rosaReadout'); if(ro.__h !== html){ ro.__h = html; ro.innerHTML = html; }
   }
 }
 
@@ -1283,7 +1352,7 @@ function dibujarFlujoParticulas(ctx, canvas, particles, dirDeg, magKn, opts){
   if(magKn < (opts.minKn||0.02)) return;
   const rad = dirDeg*D2R;
   const dx = Math.sin(rad), dy = -Math.cos(rad); // el mapa no rota: rumbo compás -> ángulo de pantalla fijo
-  const speed = Math.min(magKn, opts.capKn||6)*opts.speedMul + opts.speedBase;
+  const speed = (Math.min(magKn, opts.capKn||6)*opts.speedMul + opts.speedBase) * FLOW_K;
   const alpha = Math.min(opts.alphaMax, opts.alphaBase + magKn*opts.alphaMul);
   const ang = Math.atan2(dy,dx);
   ctx.strokeStyle = `rgba(${opts.rgb},${alpha})`;
@@ -1304,10 +1373,12 @@ function dibujarFlujoParticulas(ctx, canvas, particles, dirDeg, magKn, opts){
     ctx.closePath(); ctx.fill();
   });
 }
+let FLOW_K = 1, _flowT = 0;
 function dibujarCorrienteAnimada(){
-  const canvas = document.getElementById('currentFlowCanvas');
+  const canvas = $id('currentFlowCanvas');
   if(!canvas || !canvas.width) return;
-  const ctx = canvas.getContext('2d');
+  const now = performance.now(); FLOW_K = _flowT ? Math.min(4, Math.max(.5, (now - _flowT)/16.7)) : 1; _flowT = now;   // la velocidad visual no depende de los fps
+  const ctx = canvas.__ctx || (canvas.__ctx = canvas.getContext('2d'));
   ctx.clearRect(0,0,canvas.width,canvas.height);
   const amb = leerAmbiente(); // se relee cada frame: dirección/intensidad siempre al día
   // Corriente: rumbo "destino" (hacia dónde fluye), violeta.
@@ -1449,11 +1520,15 @@ function pasoFisico(dt){
    vía la velocidad relativa u,w); su vector se sigue viendo por separado
    en la carta (ver actualizarVectores).
    ========================================================================= */
+let fdScaleN = 20000, fdLatN = 3000;   // escalas suavizadas: ataque inmediato, decaimiento lento
 function dibujarDiagramaFuerzas(){
+  /* Diagrama de fuerzas con TODAS las fuerzas que actúan sobre el buque, calculadas cada frame por calcularFuerzas():
+     dos chorros de agua (uno por propulsor, hacia donde sale el agua), su suma = empuje, viento, resistencia del agua
+     (corriente y oleaje incluidos) y la fuerza neta. Los cuatro triángulos son los vectores de velocidad transversal de
+     proa y popa sobre el fondo, en nudos (js/forces.js). No altera la física ni los controles. */
   const canvas = document.getElementById('forceDiagramCanvas');
   if(!canvas || !ship) return;
   const ctx = canvas.getContext('2d');
-  // Tamaño lógico fijo (el contenedor no cambia); el almacén se escala por dpr para que se vea nítido.
   const FD_W = 174, FD_H = 150, dpr = Math.min(3, window.devicePixelRatio || 1);
   if(canvas.width !== Math.round(FD_W*dpr)){ canvas.width = Math.round(FD_W*dpr); canvas.height = Math.round(FD_H*dpr); }
   ctx.setTransform(dpr,0,0,dpr,0,0);
@@ -1461,14 +1536,26 @@ function dibujarDiagramaFuerzas(){
   ctx.clearRect(0,0,w,h);
   const F = calcularFuerzas();
 
-  // Dibujo ~40 % mayor que antes (casco 1,55 -> 2,17 px/m; flechas 34/40/26 -> 48/56/36 px) dentro de la misma caja.
-  const cx = w/2, cy = 68, pxm = 2.17;
-  const scaleF = 48/(ship.thrustMax*0.5 || 1);   // px por N (un solo propulsor)
-  const scaleNet = 56/(ship.thrustMax || 1);     // px por N (resultante, hasta el doble)
-  const scaleWind = 36/Math.max(F.fWindMag,1);
+  const hdgNow = norm360(estado.heading*R2D);
+  const o = getOrdenes();
+  const hdgErr = (o && o.isActive() && o.state.mode === 'heading' && o.state.hdgTarget != null) ? angDiff(o.state.hdgTarget, hdgNow)
+               : (estado.guia ? angDiff(estado.guia.CTS, hdgNow) : null);
+  // Velocidad sobre el fondo en ejes del buque: la del casco (respecto al agua) más la componente de la corriente.
+  const uG = F.u + (F.curE*F.bowE + F.curN*F.bowN), wG = F.w + (F.curE*F.bowN - F.curN*F.bowE);
+  const A = ASDForces.analyze(F, ship, { u:F.u, w:F.w, uGround:uG, wGround:wG, yawRate:estado.yawRate, headingDeg:hdgNow, headingErrDeg:hdgErr,
+                                          azP:estado.azP, azS:estado.azS });
+  estado.fuerzas = A;
 
+  // Una sola escala para empuje, correcciones y neta (la mayor mide 62 px). Los chorros usan su propia escala fija:
+  // su largo es el % de máquinas de cada propulsor (100 % = 44 px), así 50 % y 70 % se ven distintos.
+  const comps = { thrust:[A.thrust.fx,A.thrust.fy], wind:[F.windFx,F.windFy], water:[F.Fu,F.Fw], net:[F.totalFx,F.totalFy] };
+  const maxMag = Math.max(...Object.values(comps).map(v => Math.hypot(v[0],v[1])));
+  fdScaleN = Math.max(maxMag, fdScaleN*0.985, 20000);
+  const s = 62/fdScaleN;                                      // px por N
+  const JET_PX = 44;                                          // largo del chorro al 100 %
+
+  const cx = w/2, cy = 76, pxm = 2.17;
   function localToCanvas(x,y){ return { px: cx + y*pxm, py: cy - x*pxm }; }
-  // Garantía de no desborde: el extremo de toda flecha se recorta a 6 px del borde del canvas.
   function clampTip(x0,y0,x1,y1){
     const m = 6, dx = x1-x0, dy = y1-y0; let t = 1;
     if(dx>0) t = Math.min(t,(w-m-x0)/dx); else if(dx<0) t = Math.min(t,(m-x0)/dx);
@@ -1476,19 +1563,22 @@ function dibujarDiagramaFuerzas(){
     t = Math.max(0,t);
     return [x0+dx*t, y0+dy*t];
   }
-  function arrow(x0,y0,x1,y1,color,width){
+  function arrow(x0,y0,x1,y1,color,width,dash){
     [x1,y1] = clampTip(x0,y0,x1,y1);
+    ctx.save();
     ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=width;
+    if(dash) ctx.setLineDash(dash);
     ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
-    const ang=Math.atan2(y1-y0,x1-x0);
-    ctx.beginPath();
-    ctx.moveTo(x1,y1);
-    ctx.lineTo(x1-8*Math.cos(ang-0.4), y1-8*Math.sin(ang-0.4));
-    ctx.lineTo(x1-8*Math.cos(ang+0.4), y1-8*Math.sin(ang+0.4));
+    ctx.setLineDash([]);
+    const ang=Math.atan2(y1-y0,x1-x0), hs = width > 3 ? 9 : 7;
+    ctx.beginPath(); ctx.moveTo(x1,y1);
+    ctx.lineTo(x1-hs*Math.cos(ang-0.4), y1-hs*Math.sin(ang-0.4));
+    ctx.lineTo(x1-hs*Math.cos(ang+0.4), y1-hs*Math.sin(ang+0.4));
     ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
 
-  // Casco simplificado (marco local, proa arriba)
+  // Casco (marco local, proa arriba)
   const halfLen=(ship.L/2)*pxm, halfBeam=(ship.B/2)*pxm;
   ctx.beginPath();
   ctx.moveTo(cx, cy-halfLen);
@@ -1499,49 +1589,92 @@ function dibujarDiagramaFuerzas(){
   ctx.closePath();
   ctx.fillStyle='rgba(74,222,128,.07)'; ctx.fill();
   ctx.strokeStyle='#3d6a8f'; ctx.lineWidth=1.3; ctx.stroke();
-  ctx.fillStyle='#4ade80'; ctx.font='bold 12px "DM Mono", monospace'; ctx.textAlign='center';
-  ctx.fillText('PROA', cx, cy-halfLen-5);
-
-  const pP = localToCanvas(F.xP,F.yP), pS = localToCanvas(F.xS,F.yS);
-  ctx.fillStyle='#7f9cb3';
-  ctx.beginPath(); ctx.arc(pP.px,pP.py,2.8,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(pS.px,pS.py,2.8,0,Math.PI*2); ctx.fill();
-
-  // Empuje de cada propulsor: SOLO control, nada de ambiente
-  if(Math.hypot(F.FxP,F.FyP)>1) arrow(pP.px,pP.py, pP.px+F.FyP*scaleF, pP.py-F.FxP*scaleF, '#2fd4e8', 2.8);
-  if(Math.hypot(F.FxS,F.FyS)>1) arrow(pS.px,pS.py, pS.px+F.FyS*scaleF, pS.py-F.FxS*scaleF, '#fbbf24', 2.8);
+  ctx.fillStyle=VCOL.hdg; ctx.font='bold 12px "DM Mono", monospace'; ctx.textAlign='right';
+  ctx.fillText('PROA', cx-9, cy-halfLen+4);
 
   const cg = localToCanvas(0,0);
-  if(Math.hypot(F.FxProp,F.FyProp)>1) arrow(cg.px,cg.py, cg.px+F.FyProp*scaleNet, cg.py-F.FxProp*scaleNet, '#4ade80', 3.8);
+  const tip = v => ({ x: cg.px + v[1]*s, y: cg.py - v[0]*s });
 
-  // Viento: rama de cálculo AMBIENTAL, aparte (línea punteada)
-  if(F.fWindMag>50){
-    ctx.save(); ctx.setLineDash([3,3]);
-    arrow(cg.px,cg.py, cg.px+F.windFy*scaleWind, cg.py-F.windFx*scaleWind, '#ef4444', 2.3);
-    ctx.restore();
+  // --- Polígono de correcciones: empuje (suma de los dos propulsores) + viento + agua (corriente y oleaje) = fuerza neta ---
+  if(Math.hypot(...comps.net) > 1 || A.thrust.mag > 1){
+    let px0 = cg.px, py0 = cg.py;
+    ctx.save(); ctx.setLineDash([2,3]); ctx.strokeStyle='rgba(226,232,240,.32)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(px0,py0);
+    A.chain.steps.forEach(st => { ctx.lineTo(cg.px + st.y*s, cg.py - st.x*s); });
+    ctx.stroke(); ctx.restore();
   }
+  if(Math.hypot(...comps.water) > 1) arrow(cg.px,cg.py, tip(comps.water).x, tip(comps.water).y, VCOL.current, 2.4);
+  if(Math.hypot(...comps.wind) > 1)  arrow(cg.px,cg.py, tip(comps.wind).x,  tip(comps.wind).y,  VCOL.wind, 2.4);
+  if(A.thrust.mag > 1)               arrow(cg.px,cg.py, tip(comps.thrust).x, tip(comps.thrust).y, VCOL.thrust, 2, [4,3]);
+  if(Math.hypot(...comps.net) > 1)   arrow(cg.px,cg.py, tip(comps.net).x,   tip(comps.net).y,   VCOL.thrust, 3.8);
 
-  // Arco de guiñada neta total (incluye propulsión+viento+amortiguamiento)
-  const maxT = ship.maxTorque||1;
-  const frac = Math.min(1, Math.abs(F.torqueTotal)/maxT);
+  // --- Chorros de agua: uno por propulsor, en su posición real (popa, cada banda), hacia donde sale el agua (azimut + 180°) ---
+  ['port','starboard'].forEach(k => {
+    const j = A.jets[k], col = k === 'port' ? VCOL.port : VCOL.starboard;
+    const o0 = localToCanvas(j.x, j.y);
+    ctx.fillStyle='#7f9cb3'; ctx.beginPath(); ctx.arc(o0.px,o0.py,2.8,0,Math.PI*2); ctx.fill();
+    if(j.pct < 1) return;
+    const L = JET_PX * j.pct/100, rad = j.jetDeg*D2R;
+    // jetDeg se mide como el azimut: 0 = proa, 90 = estribor
+    arrow(o0.px, o0.py, o0.px + L*Math.sin(rad), o0.py - L*Math.cos(rad), col, 2.6);
+  });
+
+  // Arco de guiñada neta total
+  const frac = Math.min(1, Math.abs(F.torqueTotal)/(ship.maxTorque||1));
   if(frac>0.015){
     const r=31, dirRight = F.torqueTotal>0;
-    ctx.strokeStyle = dirRight?'#fbbf24':'#2fd4e8';
-    ctx.lineWidth = 2.6+frac*2.8;
+    ctx.strokeStyle = dirRight?VCOL.starboard:VCOL.port; ctx.globalAlpha = .75;
+    ctx.lineWidth = 2.2+frac*2.4;
     ctx.beginPath();
     if(dirRight) ctx.arc(cg.px,cg.py,r,-0.35,-0.35+0.25+frac*1.6,false);
     else ctx.arc(cg.px,cg.py,r,Math.PI+0.35,Math.PI+0.35-0.25-frac*1.6,true);
-    ctx.stroke();
+    ctx.stroke(); ctx.globalAlpha = 1;
   }
 
-  function dirLabel(t){ return t>150?'→ ESTRIBOR':t<-150?'← BABOR':'— recto'; }
-  document.getElementById('fdTP').textContent = (F.torqueP/1000).toFixed(0)+' kN·m';
-  document.getElementById('fdTS').textContent = (F.torqueS/1000).toFixed(0)+' kN·m';
-  document.getElementById('fdTW').textContent = (F.torqueWind/1000).toFixed(0)+' kN·m';
-  document.getElementById('fdTNet').textContent = (F.torqueTotal/1000).toFixed(0)+' kN·m '+dirLabel(F.torqueTotal);
-  const fPropMag = Math.hypot(F.FxProp,F.FyProp);
-  const fPropDir = fPropMag>1 ? Math.round(norm360(Math.atan2(F.FyProp,F.FxProp)*R2D)) : 0;
-  document.getElementById('fdFNet').textContent = (fPropMag/1000).toFixed(0)+' kN @ '+String(fPropDir).padStart(3,'0')+'°';
+  // --- Vectores de velocidad transversal de proa y popa (Bow/Stern Transverse Speed Vectors) ---
+  // Cuatro triángulos: amura y aleta de estribor (verde, 90°) y de babor (rojo, 270°). Miden la velocidad lateral del extremo
+  // SOBRE EL FONDO (v ± r·L/2), en nudos: se rellena el del lado hacia el que se mueve ese extremo y su tamaño crece con la velocidad.
+  const yBow = cy - halfLen*0.62, yStern = cy + halfLen*0.62;
+  const xStbd = cx + halfBeam*0.9 + 30, xPort = cx - halfBeam*0.9 - 30;
+  function tri(x, y, dir, color, kn, active, label){
+    const size = 3.5 + 4.5*Math.min(1, Math.abs(kn)/1.5);       // 3,5 a 8 px (mitad que antes)
+    ctx.save();
+    ctx.beginPath(); ctx.moveTo(x+dir*size*0.9,y); ctx.lineTo(x-dir*size*0.5,y-size*0.62); ctx.lineTo(x-dir*size*0.5,y+size*0.62); ctx.closePath();
+    ctx.lineWidth = 1.2; ctx.lineJoin = 'round'; ctx.strokeStyle = color; ctx.globalAlpha = active ? 1 : .4; ctx.stroke();
+    if(active){ ctx.fillStyle = color; ctx.globalAlpha = .6; ctx.fill(); }
+    ctx.restore();
+    if(label){
+      ctx.save(); ctx.font = 'bold 11px "DM Mono", monospace'; ctx.fillStyle = color; ctx.textBaseline = 'middle';
+      ctx.textAlign = dir > 0 ? 'left' : 'right';
+      ctx.fillText(label, x + dir*(size*0.9 + 4), y);
+      ctx.restore();
+    }
+  }
+  function endTriangles(y, fall){
+    const moving = fall.v !== 0, stbd = fall.v > 0, kn = Math.abs(fall.knots);
+    const lab = kn >= 0.05 ? kn.toFixed(1) : '';
+    tri(xStbd, y, +1, VCOL.starboard, kn, moving && stbd,  moving && stbd ? lab : '');
+    tri(xPort, y, -1, VCOL.port,      kn, moving && !stbd, moving && !stbd ? lab : '');
+  }
+  endTriangles(yBow,   A.fall.bow);
+  endTriangles(yStern, A.fall.stern);
+
+  // --- Lecturas ---
+  const kN = v => (Math.abs(v)/1000).toFixed(Math.abs(v) >= 99500 ? 0 : 1);
+  const arrowOf = v => v > 0 ? '→' : v < 0 ? '←' : '·';
+  const set = (id, t) => { const e = document.getElementById(id); if(e && e.textContent !== t) e.textContent = t; };
+  const n = A.net;
+  set('fdNet', `${kN(n.mag)} kN @ ${String(Math.round(n.absDeg)).padStart(3,'0')}°`);
+  { const tt = `Fuerza neta de todas las fuerzas (propulsores, viento, agua y oleaje). Rumbo del empuje ${n.relDeg>=0?'+':''}${Math.round(n.relDeg)}° respecto a la proa.`; const row = $id('fdNet').parentNode; if(row.__tt !== tt){ row.__tt = tt; row.title = tt; } }
+  set('fdAcc', `${n.accKnS.toFixed(2)} kn/s`);
+  const endTxt = fall => `${arrowOf(fall.v)} ${Math.abs(fall.knots).toFixed(2)} kn · ${Math.abs(fall.deg).toFixed(0)}°`;
+  set('fdBow', endTxt(A.fall.bow)); set('fdStern', endTxt(A.fall.stern));
+  set('fdThr', `${kN(A.thrust.mag)} kN @ ${String(Math.round(norm360(hdgNow + A.thrust.relDeg))).padStart(3,'0')}°`);
+  const cls = (id, v) => { const r = document.getElementById(id).parentNode; r.classList.toggle('stbd', v > 0.03); r.classList.toggle('port', v < -0.03); };
+  cls('fdBow', A.fall.bow.v); cls('fdStern', A.fall.stern.v);
+  const dirLabel = t => t>150000?'→':t<-150000?'←':'·';
+  set('fdTNet', `${(F.torqueTotal/1000).toFixed(0)} kN·m ${dirLabel(F.torqueTotal)}`);
+  set('fdScale', `Flecha máx. ${kN(fdScaleN)} kN`);
 }
 
 /* =========================================================================
@@ -1555,8 +1688,11 @@ function crearControlAzimutal(canvasId, trackId, fillId, handleId, readoutAzId, 
   wheel.draggable = false;
   wheel.src = 'controles/control.webp';
   control.prepend(wheel);
+  let lastAz = null;
   function dibujar(){
     const az = norm360(getAz());
+    if(az === lastAz) return;              // se llama cada frame: solo escribe cuando el dial se movió
+    lastAz = az;
     wheel.style.transform = `translate(-50%, -50%) rotate(${az}deg)`;
     control.setAttribute('aria-valuenow', String(Math.round(az)));
     control.setAttribute('aria-valuetext', String(Math.round(az)).padStart(3,'0')+' grados');
@@ -1679,7 +1815,7 @@ function redibujarRuta(){
   const pts = estado.ruta.filter(p=>puntoDentroCarta(p.lat,p.lon));
   if(pts.length===0){ document.getElementById('routeInfo').textContent='Sin derrota'; ovSyncRoute(); return; }
   const latlngs = pts.map(p=>[p.lat,p.lon]);
-  L.polyline(latlngs, {color:'#f97316', weight:2.5, dashArray:'6,5', opacity:.9}).addTo(routeLayer);
+  L.polyline(latlngs, {color:VCOL.route, weight:2.5, dashArray:'6,5', opacity:.9}).addTo(routeLayer);
   let totalNM = 0, legsHtml = '';
   pts.forEach((p,i)=>{
     L.marker([p.lat,p.lon], {icon:L.divIcon({className:'', html:`<div class="wp-lbl">${i+1}</div>`, iconSize:[18,18], iconAnchor:[9,9]})}).addTo(routeLayer);
@@ -1826,6 +1962,7 @@ function pilotoAutomatico(){
    y el empuje, y ASDOrders.allocate los reparte entre los dos azimutales con la
    lógica interna de los controles. Excluyente con el piloto automático.
    ========================================================================= */
+const VCOL = ASDVectors.colors();   // colores del lenguaje de vectores (tokens CSS --v-*)
 let ordenes = null;
 function getOrdenes(){ if(!ordenes && window.ASDOrders) ordenes = ASDOrders.create(); return ordenes; }
 function ordenesActivas(){ const o = getOrdenes(); return !!(o && o.isActive()); }
@@ -1837,14 +1974,12 @@ function refrescarBloqueo(){
 function actualizarOrdenBadge(){
   const o = getOrdenes(), txt = (o && o.isActive()) ? o.describe() : '';
   const b = document.getElementById('orderBadge');
-  if(b){ b.hidden = !txt; b.textContent = txt ? 'Orden: ' + txt : ''; }
+  if(b){ b.hidden = !txt; b.textContent = txt; }
   document.getElementById('tModo').textContent = txt || textoModo();
 }
 function ordenesAplicar(){
-  // Una orden de puente toma el mando: sale del piloto, activa propulsores y bloquea los controles manuales.
-  if(estado.autopilot) toggleAutopilot();
-  estado.manual = true;
-  const btn = document.getElementById('modeToggle'); btn.textContent = 'Manual'; btn.className = 'btn manual';
+  // La orden ya fue admitida por SimAPI (piloto apagado y propulsores activos): solo bloquea los controles manuales.
+  // Nunca cambia por su cuenta el modo de gobierno: eso lo decide el práctico.
   refrescarBloqueo(); actualizarOrdenBadge();
 }
 function ordenesLiberar(){
@@ -1866,7 +2001,8 @@ function ordenesPaso(dtSim){
     if(ev.type !== 'heading_achieved') return;
     const h = ASDOrders.pad3(ev.heading);
     if(window.ASDAudio) ASDAudio.play('ack');
-    if(window.ASDVoice) ASDVoice.announce('heading_achieved ' + h, { key:'hdg', fallbackText:'Rumbo ' + h + ', así.' });
+    const sp = ASDOrders.spokenHeading(ev.heading);
+    if(window.ASDVoice) ASDVoice.announce({ es:'Rumbo ' + sp.es + ', así.', en:'Steady on ' + sp.en + '.' }, { key:'hdg' });
   });
 }
 
@@ -1908,7 +2044,10 @@ function hullSVG(color){
 const shipIcon = L.divIcon({className:'', html:hullSVG('#4ade80'), iconSize:[30,30], iconAnchor:[15,15]});
 let shipMarker=null;
 const vectorLayer = L.layerGroup().addTo(map);
-const trackLayer = L.layerGroup().addTo(map);
+/* Rastro del buque: un arreglo circular y UNA polilínea punteada (antes 150 circleMarker: cada movimiento de la carta
+   reproyectaba los 150 trazados). La batimetría lee del arreglo. */
+const TRACK_MAX = 150, trackPts = [];
+const trackLine = L.polyline([], {color:VCOL.cog, weight:2.4, opacity:.6, dashArray:'0.1 7', lineCap:'round', interactive:false}).addTo(map);
 
 function ubicarBuque(){
   const lat = dmsToDecimal(document.getElementById('latDMS').value, true);
@@ -1921,7 +2060,7 @@ function ubicarBuque(){
   // recentrado automáticamente durante la navegación.
   map.setView([lat,lon], CHART_INITIAL_ZOOM, {animate:false});
   setFollow(true);   // ubicar el buque vuelve a centrar la carta sobre él
-  trackLayer.clearLayers(); vectorLayer.clearLayers(); ovClearTrack();
+  trackPts.length = 0; trackLine.setLatLngs([]); vectorLayer.clearLayers(); ovClearTrack();
   estado.historial = {t:[],abat:[],deriva:[]};
   estado.tSim = 0;
   setTimeout(actualizarIconoBuque, 0); // asegura que la proa se vea correcta de inmediato
@@ -1937,41 +2076,56 @@ function dmsToDecimal(dms,isLat){
   return dec;
 }
 
-function actualizarVectores(lat,lon,hdgDeg,cogDeg){
-  vectorLayer.clearLayers();
-  if(!puntoDentroCarta(lat,lon)) return;
-  const base=0.006, baseAmb=0.0022;
-  const vectorVisualScale = 0.3;
-  function seg(deg,len,color,dash){
-    const rad=deg*D2R;
-    const p2 = limitarPuntoACarta({lat:lat+len*Math.cos(rad), lon:lon+len*Math.sin(rad)});
-    L.polyline([[lat,lon],[p2.lat,p2.lon]], {color,weight:3,dashArray:dash,opacity:.92}).addTo(vectorLayer);
-    return p2;
-  }
-  // Punta de flecha simple (dos trazos cortos en V) en el extremo p2,
-  // orientada según la dirección del vector (deg), para dejar claro
-  // hacia dónde apunta (útil sobre todo en viento/corriente que no
-  // tienen guion largo como HDG/COG).
-  function puntaFlecha(p2, deg, color, sizeDeg){
-    const rad = deg*D2R;
-    const backL = norm360(deg+180-25)*D2R, backR = norm360(deg+180+25)*D2R;
-    const pL = limitarPuntoACarta({lat:p2.lat+sizeDeg*Math.cos(backL), lon:p2.lon+sizeDeg*Math.sin(backL)});
-    const pR = limitarPuntoACarta({lat:p2.lat+sizeDeg*Math.cos(backR), lon:p2.lon+sizeDeg*Math.sin(backR)});
-    L.polygon([[p2.lat,p2.lon],[pL.lat,pL.lon],[pR.lat,pR.lon]], {color, fillColor:color, fillOpacity:.95, weight:1, opacity:.95}).addTo(vectorLayer);
-  }
-  const pHdg = seg(hdgDeg, base*1.4*vectorVisualScale, '#4ade80', '8,8');
-  const pCog = seg(cogDeg, base*1.4*vectorVisualScale, '#00d4ff', '8,8');
-  L.polyline([[pCog.lat,pCog.lon],[pHdg.lat,pHdg.lon]], {color:'#f97316',weight:4,dashArray:'4,4'}).addTo(vectorLayer);
+/* Vectores sobre el buque: canvas en pantalla (js/vectors.js). Cada flecha lleva su etiqueta con el valor.
+   Las etiquetas esquivan los elementos de la interfaz (panel de puente, radar, consola, barra…). */
+let UI_AVOID = [];
+function refreshAvoid(){
+  const m = document.getElementById('map').getBoundingClientRect(), out = [];
+  ['bridgeFeed','rosaVientos','simDock','gameCompass','mapTools','overview','northArrow','cursorStatus','forceDiagram','vectorList','btnForce','btnVec'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el || el.hidden || !el.offsetWidth) return;
+    const r = el.getBoundingClientRect();
+    out.push({ x:r.left-m.left-4, y:r.top-m.top-4, w:r.width+8, h:r.height+8 });
+  });
+  UI_AVOID = out;
+}
+setInterval(refreshAvoid, 250);
+const vecCanvas = document.getElementById('vectorCanvas'), vecCtx = vecCanvas.getContext('2d');
+let _vecListAt = 0, _vecListHtml = '';
+function actualizarListaVectores(data){
+  const list = document.getElementById('vectorList');
+  if(!list || list.hidden) return;
+  const now = performance.now(); if(now - _vecListAt < 100) return; _vecListAt = now;
+  const html = ASDVectors.listRows(data).map(r =>
+    `<div class="vrow" style="--vc:${VCOL[r.kind]}"><i class="dotv"></i><span class="vn">${r.name}</span><span class="vv">${r.value}</span></div>`).join('');
+  if(html !== _vecListHtml){ document.getElementById('vecRows').innerHTML = html; _vecListHtml = html; }
+}
+let _vecBox = null, _vecListData = null;
+function dibujarVectoresPantalla(){
+  const W = map.getSize().x, H = map.getSize().y;
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  let full = false;
+  if(vecCanvas.width !== Math.round(W*dpr) || vecCanvas.height !== Math.round(H*dpr)){ vecCanvas.width = Math.round(W*dpr); vecCanvas.height = Math.round(H*dpr); full = true; }
+  vecCtx.setTransform(dpr,0,0,dpr,0,0);
+  // Se borra solo la zona usada en el frame anterior (alrededor del buque), no los ~1,3 Mpx del mapa entero
+  if(full || !_vecBox) vecCtx.clearRect(0,0,W,H);
+  else vecCtx.clearRect(_vecBox.x, _vecBox.y, _vecBox.w, _vecBox.h);
+  _vecBox = null;
+  if(!shipMarker || !shipBody || !map._loaded) return;
+  const p = map.latLngToContainerPoint(shipMarker.getLatLng());
+  if(p.x < -150 || p.y < -150 || p.x > W+150 || p.y > H+150) return;
+  { const R = 380, x0 = Math.max(0, Math.floor(p.x - R)), y0 = Math.max(0, Math.floor(p.y - R)); _vecBox = { x:x0, y:y0, w:Math.min(W, Math.ceil(p.x + R)) - x0, h:Math.min(H, Math.ceil(p.y + R)) - y0 }; }
   const amb = leerAmbiente();
-  // Escala visual únicamente: no modifica la física ni los valores de
-  // telemetría. Se reduce el trazo y, al depender de él, la punta al 30%.
-  const lenViento = baseAmb*Math.min(amb.vKn,40)/10*vectorVisualScale;
-  const lenCorriente = baseAmb*Math.min(amb.cKn,10)*3*vectorVisualScale;
-  const dirViento = norm360(amb.vDirFrom+180); // hacia donde sopla
-  const pViento = seg(dirViento, lenViento, '#ef4444', null);
-  puntaFlecha(pViento, dirViento, '#ef4444', lenViento*0.35);
-  const pCorriente = seg(amb.cDirTo, lenCorriente, '#a78bfa', null);
-  puntaFlecha(pCorriente, amb.cDirTo, '#a78bfa', lenCorriente*0.3);
+  const hdg = norm360(estado.heading*R2D);
+  const moving = estado.nav && estado.nav.sog > 0.15;
+  const data = { hdg, cog: moving ? estado.ultimoCOG : null, sogKn: moving ? estado.nav.sog : 0,
+                 cts: estado.guia ? estado.guia.CTS : null,
+                 windFrom: amb.vDirFrom, windKn: amb.vKn, curTo: amb.cDirTo, curKn: amb.cKn };
+  vecCtx.font = '700 11px "DM Mono", ui-monospace, monospace';
+  const view = { cx:p.x, cy:p.y, w:W, h:H };
+  const lay = ASDVectors.layout(view, data, t => vecCtx.measureText(t).width, UI_AVOID, window.__tagsMode || 'full');
+  _vecListData = data;               // la lista (DOM) se actualiza después de dibujar todos los canvas
+  ASDVectors.render(vecCtx, { cx:p.x, cy:p.y, w:W, h:H, geo:lay.geo, tags:lay.tags, colors:VCOL });
 }
 
 /* =========================================================================
@@ -1983,10 +2137,17 @@ function actualizarVectores(lat,lon,hdgDeg,cogDeg){
    "◀ CORRIGE Nº A BABOR" / "▶ CORRIGE Nº A ESTRIBOR".
    ========================================================================= */
 const FOV = 62; // grados visibles a cada lado del centro de la cinta (HUD compacto)
+let compassW = 0;
+(function(){
+  const c = document.getElementById('compassCanvas'); if(!c) return;
+  const upd = ()=>{ compassW = Math.round(c.clientWidth); };
+  if(window.ResizeObserver) new ResizeObserver(upd).observe(c); else window.addEventListener('resize', upd);
+  upd(); setTimeout(upd, 300);
+})();
 function actualizarCompassHUD(hdgDeg, cogDeg, amb){
-  const cvs = document.getElementById('compassCanvas');
-  const ctx = cvs.getContext('2d');
-  const cw = Math.round(cvs.clientWidth);
+  const cvs = $id('compassCanvas');
+  const ctx = cvs.__ctx || (cvs.__ctx = cvs.getContext('2d'));
+  const cw = compassW;                         // ancho en caché (ResizeObserver): leer clientWidth cada frame forzaba un layout
   if(cw>40 && cvs.width!==cw) cvs.width = cw; // sin escalado: el texto del canvas conserva su tamaño
   const w = cvs.width, h = cvs.height, midY = h*0.72;
   ctx.clearRect(0,0,w,h);
@@ -2013,7 +2174,7 @@ function actualizarCompassHUD(hdgDeg, cogDeg, amb){
     ctx.beginPath(); ctx.moveTo(x,5); ctx.lineTo(x,5+th); ctx.stroke();
     if(major){
       const labels = {0:'N',90:'E',180:'S',270:'O'};
-      ctx.fillStyle = labels[d] ? '#4ade80' : '#7f9cb3';
+      ctx.fillStyle = labels[d] ? VCOL.hdg : '#7f9cb3';
       ctx.font = labels[d] ? 'bold 12px "DM Mono", monospace' : '11px "DM Mono", monospace';
       if(x>20 && x<w-20) ctx.fillText(labels[d] || String(d).padStart(3,'0'), x, 19);
     }
@@ -2022,9 +2183,9 @@ function actualizarCompassHUD(hdgDeg, cogDeg, amb){
   // marcador COG (rumbo real sobre el fondo)
   if(inView(cogDeg)){
     const x = xFor(cogDeg);
-    ctx.strokeStyle='#00d4ff'; ctx.lineWidth=2;
+    ctx.strokeStyle=VCOL.cog; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(x,midY-9); ctx.lineTo(x,midY+1); ctx.stroke();
-    ctx.fillStyle='#00d4ff'; ctx.beginPath(); ctx.moveTo(x,midY+1); ctx.lineTo(x-4,midY+7); ctx.lineTo(x+4,midY+7); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=VCOL.cog; ctx.beginPath(); ctx.moveTo(x,midY+1); ctx.lineTo(x-4,midY+7); ctx.lineTo(x+4,midY+7); ctx.closePath(); ctx.fill();
   }
 
   // marcador CTS y waypoint (si hay guiado activo)
@@ -2032,49 +2193,54 @@ function actualizarCompassHUD(hdgDeg, cogDeg, amb){
   if(guia){
     if(inView(guia.CTS)){
       const x = xFor(guia.CTS);
-      ctx.strokeStyle='#b48cf2'; ctx.lineWidth=2.2;
+      ctx.strokeStyle=VCOL.cts; ctx.lineWidth=2.2;
       ctx.beginPath(); ctx.moveTo(x,midY-11); ctx.lineTo(x,midY+2); ctx.stroke();
     }
     if(inView(guia.bearingWP)){
       const x = xFor(guia.bearingWP);
-      ctx.fillStyle='#f97316'; ctx.beginPath(); ctx.moveTo(x,midY+2); ctx.lineTo(x+4,midY+6); ctx.lineTo(x,midY+10); ctx.lineTo(x-4,midY+6); ctx.closePath(); ctx.fill();
+      ctx.fillStyle=VCOL.route; ctx.beginPath(); ctx.moveTo(x,midY+2); ctx.lineTo(x+4,midY+6); ctx.lineTo(x,midY+10); ctx.lineTo(x-4,midY+6); ctx.closePath(); ctx.fill();
       ctx.font='bold 11px "DM Mono", monospace'; ctx.textAlign='left'; ctx.fillText(String(guia.wpNum), x+7, midY+7); ctx.textAlign='center';
     }
   }
 
   // marcador central fijo = proa propia (siempre al centro)
-  ctx.strokeStyle='#4ade80'; ctx.lineWidth=2;
+  ctx.strokeStyle=VCOL.hdg; ctx.lineWidth=2;
   ctx.beginPath(); ctx.moveTo(w/2,3); ctx.lineTo(w/2,h-3); ctx.stroke();
-  ctx.fillStyle='#4ade80';
+  ctx.fillStyle=VCOL.hdg;
   ctx.beginPath(); ctx.moveTo(w/2,3); ctx.lineTo(w/2-4,9); ctx.lineTo(w/2+4,9); ctx.closePath(); ctx.fill();
 
   // Lecturas numéricas
-  document.getElementById('hudHDG').textContent = String(Math.round(hdgDeg)).padStart(3,'0')+'°';
-  document.getElementById('hudCOG').textContent = String(Math.round(cogDeg)).padStart(3,'0')+'°';
+  setText($id('hudHDG'), String(Math.round(hdgDeg)).padStart(3,'0')+'°');
+  setText($id('hudCOG'), String(Math.round(cogDeg)).padStart(3,'0')+'°');
+  setText($id('hudSOG'), estado.nav ? estado.nav.sog.toFixed(1)+' kn' : '—');
+  const ctsEl = cvs.__cts || (cvs.__cts = document.querySelector('#gameCompass .cts'));
+  if(ctsEl.hidden === !!estado.guia) ctsEl.hidden = !estado.guia;       // CTS solo con guiado: HDG · COG · SOG caben siempre en una línea
 
-  const banner = document.getElementById('correctionBanner');
-  const wpBadge = document.getElementById('wpBadge');
-  const xteFill = document.getElementById('xteBarFill');
+  const banner = $id('correctionBanner');
+  const wpBadge = $id('wpBadge');
+  const xteFill = $id('xteBarFill');
   if(guia){
-    document.getElementById('hudCTS').textContent = String(Math.round(guia.CTS)).padStart(3,'0')+'°';
+    setText($id('hudCTS'), String(Math.round(guia.CTS)).padStart(3,'0')+'°');
     const err = angDiff(guia.CTS, hdgDeg); // + => hay que girar a estribor
     const absErr = Math.abs(err);
     const lado = err>0 ? 'estribor ▶' : (err<0 ? '◀ babor' : 'en rumbo');
-    if(absErr<2){ banner.className='ok'; banner.textContent = '✓ En rumbo'; }
-    else if(absErr<10){ banner.className='mid'; banner.textContent = `Corrige ${absErr.toFixed(0)}° a ${lado}`; }
-    else { banner.className='high'; banner.textContent = `¡Corrige ${absErr.toFixed(0)}° a ${lado}!`; }
+    if(absErr<2){ setCls(banner,'ok'); setText(banner,'✓ En rumbo'); }
+    else if(absErr<10){ setCls(banner,'mid'); setText(banner,`Corrige ${absErr.toFixed(0)}° a ${lado}`); }
+    else { setCls(banner,'high'); setText(banner,`¡Corrige ${absErr.toFixed(0)}° a ${lado}!`); }
     const distNM = (guia.distWP/1852).toFixed(2);
-    wpBadge.textContent = `WP${guia.wpNum}/${guia.totalWp} · ${distNM} NM · demora ${Math.round(guia.bearingWP)}° · deriva ${angDiff(guia.CTS,guia.bearingWP).toFixed(0)}°`;
+    setText(wpBadge, `WP${guia.wpNum}/${guia.totalWp} · ${distNM} NM · ${String(Math.round(guia.bearingWP)).padStart(3,'0')}°`);
     const xteM = guia.xte;
     const xtePx = Math.max(-108, Math.min(108, xteM*0.6));
-    xteFill.style.left = `calc(50% + ${xtePx}px)`;
-    xteFill.style.background = Math.abs(xteM)<20 ? '#4ade80' : Math.abs(xteM)<60 ? '#fbbf24' : '#ef4444';
+    const xl = `calc(50% + ${Math.round(xtePx)}px)`, xb = Math.abs(xteM)<20 ? '#4ade80' : Math.abs(xteM)<60 ? '#fbbf24' : '#ef4444';
+    if(xteFill.__l !== xl){ xteFill.__l = xl; xteFill.style.left = xl; }
+    if(xteFill.__b !== xb){ xteFill.__b = xb; xteFill.style.background = xb; }
   } else {
-    document.getElementById('hudCTS').textContent='—';
-    banner.className='idle';
-    banner.textContent = estado.autopilot ? 'Piloto: sin más puntos' : 'Sin guiado';
-    wpBadge.textContent = (estado.ruta && estado.ruta.length>0) ? 'Derrota lista: active Piloto' : 'Sin derrota';
-    xteFill.style.left='50%'; xteFill.style.background='#2fd4e8';
+    setText($id('hudCTS'), '—');
+    setCls(banner,'idle');
+    setText(banner, estado.autopilot ? 'Piloto: sin más puntos' : 'Sin guiado');
+    setText(wpBadge, (estado.ruta && estado.ruta.length>0) ? 'Derrota lista: active Piloto' : 'Sin derrota');
+    if(xteFill.__l !== '50%'){ xteFill.__l = '50%'; xteFill.style.left = '50%'; }
+    if(xteFill.__b !== '#2fd4e8'){ xteFill.__b = '#2fd4e8'; xteFill.style.background = '#2fd4e8'; }
   }
 }
 
@@ -2084,8 +2250,8 @@ function actualizarCompassHUD(hdgDeg, cogDeg, amb){
 const chartAbat = new Chart(document.getElementById('chartAbat'), {
   type:'line',
   data:{labels:[], datasets:[
-    {label:'Abatimiento °', data:[], borderColor:'#00d4ff', backgroundColor:'rgba(0,212,255,.08)', tension:.25, fill:true, pointRadius:0},
-    {label:'Deriva °', data:[], borderColor:'#f97316', tension:.25, pointRadius:0},
+    {label:'Abatimiento °', data:[], borderColor:VCOL.drift, backgroundColor:'rgba(250,204,21,.10)', tension:.25, fill:true, pointRadius:0},
+    {label:'Deriva °', data:[], borderColor:VCOL.drift, borderDash:[5,4], tension:.25, pointRadius:0},
   ]},
   options:{responsive:true, maintainAspectRatio:false, animation:false,
     plugins:{legend:{labels:{color:'#a7bfc4', font:{size:11}, boxWidth:12, boxHeight:3, padding:10}}},
@@ -2118,20 +2284,30 @@ function actualizarIconoBuque(){
   if(el){ const svg=el.querySelector('.ship-hull'); if(svg) svg.style.transform = `rotate(${hdgDeg}deg)`; }
   return {lat,lon,hdgDeg};
 }
+/* Reparto del trabajo por frame (el buque se mueve a la cadencia de la pantalla; lo demás va a su ritmo):
+   - física, icono y cámara: cada frame (la cámara hace UN solo panBy, tras la física);
+   - canvas de vectores, corriente, radar, brújula: ≤ 30 por segundo; diagrama de fuerzas ≤ 20;
+   - texto del DOM (telemetría, brújula): solo cuando cambia y como mucho a 8 Hz. */
+let dtSuave = 1/60;
 function frame(ts){
   requestAnimationFrame(frame);
   ctrlP.dibujar(); ctrlS.dibujar();
-  actualizarIconoBuque();   // la proa se refleja siempre, incluso con la simulación en pausa
-  seguirBuque();
-  dibujarCorrienteAnimada(); // animación de corriente ambiental, incluso en pausa
-  dibujarDiagramaFuerzas();  // modelo de fuerzas en tiempo real, incluso en pausa
-  estado.ultimoHDG = norm360(estado.heading*R2D);
-  if(estado.ultimoCOG==null) estado.ultimoCOG = estado.ultimoHDG;
-  dibujarRosaVientos();      // rosa de los vientos, incluso en pausa (usa el último HDG/COG conocido)
-  if(!estado.simActiva || !shipBody){ lastFrame = ts; if(shipBody) actualizarCompassHUD(estado.ultimoHDG, estado.ultimoCOG, leerAmbiente()); return; }
+  const corre = estado.simActiva && shipBody;
+  /* ORDEN: primero todo el dibujo en canvas y luego las mutaciones del DOM (icono, cámara, textos). Fijar ctx.font con el
+     DOM sucio obliga al navegador a recalcular estilo y layout en ese mismo instante: antes pasaba una vez por frame. */
+  if(!corre || every('hdgcog', 30, ts)){ if(!corre) estado.ultimoHDG = norm360(estado.heading*R2D); if(estado.ultimoCOG==null) estado.ultimoCOG = estado.ultimoHDG; }
+  if(every('vec', 30, ts)) dibujarVectoresPantalla();
+  if(every('flow', 30, ts)) dibujarCorrienteAnimada();       // animación de corriente ambiental, incluso en pausa
+  if(every('rosa', 33, ts)) dibujarRosaVientos();            // radar, incluso en pausa (usa el último HDG/COG conocido)
+  if(every('fd', 50, ts)) dibujarDiagramaFuerzas();          // modelo de fuerzas en tiempo real, incluso en pausa
+  if(shipBody && every('compass', 33, ts)) actualizarCompassHUD(estado.ultimoHDG, estado.ultimoCOG, leerAmbiente());
+  if(_vecListData && every('veclist', 100, ts)) actualizarListaVectores(_vecListData);
+  if(!corre){ lastFrame = ts; actualizarIconoBuque(); seguirBuque(); return; }   // en pausa, la proa y la cámara siguen vivas
   if(lastFrame===null) lastFrame = ts;
   let dtReal = (ts-lastFrame)/1000; lastFrame = ts;
   dtReal = Math.min(dtReal, 0.1);
+  dtSuave += (dtReal - dtSuave)*0.25;                         // el paso se suaviza: el avance no tiembla con el jitter de los frames
+  dtReal = dtSuave;
   const simSpeed = parseFloat(document.getElementById('simSpeed').value)||5;
   let dtSim = dtReal*simSpeed;
   const subSteps = Math.min(20, Math.max(1, Math.ceil(dtSim/0.5)));
@@ -2141,7 +2317,7 @@ function frame(ts){
   for(let i=0;i<subSteps;i++) pasoFisico(dtStep);
 
   const {lat,lon,hdgDeg} = actualizarIconoBuque();
-  seguirBuque();   // tras mover el buque: la carta se desplaza y el buque queda en el centro
+  seguirBuque();   // UNA sola vez por frame, tras mover el buque: la carta se desplaza y el buque queda en el centro
 
   const amb = leerAmbiente();
   const cRad = amb.cDirTo*D2R;
@@ -2154,13 +2330,11 @@ function frame(ts){
   const abatimiento = stw>0.05 ? angDiff(waterTrackDeg,hdgDeg) : 0;
   const derivaTotal = sog>0.05 ? angDiff(cogDeg,hdgDeg) : 0;
 
-  actualizarVectores(lat,lon,hdgDeg,cogDeg);
-  actualizarCompassHUD(hdgDeg,cogDeg,amb);
   estado.ultimoHDG = hdgDeg; estado.ultimoCOG = cogDeg; // para la rosa de los vientos
 
   const prof = profundidadEn(lat,lon);
   const ukc = prof + amb.marea - ship.T;
-  actualizarTelemetria(lat,lon,hdgDeg,stw,sog,cogDeg,abatimiento,derivaTotal,prof,ukc);
+  if(every('telem', 125, ts)) actualizarTelemetria(lat,lon,hdgDeg,stw,sog,cogDeg,abatimiento,derivaTotal,prof,ukc);
   estado.nav = {lat,lon,hdg:hdgDeg,stw:stw/0.5144,sog:sog/0.5144,cog:cogDeg,abat:abatimiento,deriva:derivaTotal,prof,ukc};
   verificarEncallamiento(ukc,prof);
 
@@ -2168,12 +2342,13 @@ function frame(ts){
   if(trackAccum>1.2){
     trackAccum=0;
     ovPushTrack(lat,lon);
-    if(puntoDentroCarta(lat,lon)) L.circleMarker([lat,lon], {radius:1.6, color:'#00d4ff', fillColor:'#00d4ff', fillOpacity:.55, weight:0}).addTo(trackLayer);
-    const layers = trackLayer.getLayers();
-    if(layers.length>150) trackLayer.removeLayer(layers[0]);
+    if(puntoDentroCarta(lat,lon)){
+      trackPts.push([lat,lon]); if(trackPts.length > TRACK_MAX) trackPts.shift();
+      trackLine.setLatLngs(trackPts);
+    }
   }
-  chartAccum += dtSim;
-  if(chartAccum>0.8){
+  chartAccum += dtReal;                      // tiempo REAL (no de simulación): a 15x se actualizaba cada ~3 frames
+  if(chartAccum>0.5){
     chartAccum=0;
     estado.historial.t.push(estado.tSim.toFixed(0));
     estado.historial.abat.push(abatimiento);
@@ -2184,8 +2359,8 @@ function frame(ts){
     chartAbat.data.datasets[1].data = estado.historial.deriva;
     chartAbat.update('none');
 
-    const pts = trackLayer.getLayers().slice(-25);
-    const profs = pts.map(l=>profundidadEn(l.getLatLng().lat, l.getLatLng().lng));
+    const pts = trackPts.slice(-25);
+    const profs = pts.map(l=>profundidadEn(l[0], l[1]));
     chartBatim.data.labels = profs.map((_,i)=>i);
     chartBatim.data.datasets[0].data = profs;
     chartBatim.data.datasets[1].data = profs.map(()=>ship.T);
@@ -2194,41 +2369,57 @@ function frame(ts){
 }
 requestAnimationFrame(frame);
 
+/* Modo ?perf: panel con fps, ms entre frames y coste del propio bucle, para ver qué frena el avance en tu equipo. */
+if(/[?&]perf(=|&|$)/.test(location.search)){
+  const hud = document.createElement('pre');
+  hud.id = 'perfHud'; hud.setAttribute('aria-hidden', 'true');
+  hud.style.cssText = 'position:fixed;left:8px;bottom:8px;z-index:99999;margin:0;padding:6px 8px;background:rgba(0,0,0,.78);color:#9fe;font:11px/1.35 monospace;pointer-events:none;border-radius:4px;';
+  document.body.appendChild(hud);
+  const dts = [], costs = []; let last = 0;
+  const inner = frame;
+  window.frame = function(ts){
+    if(last){ dts.push(ts - last); if(dts.length > 120) dts.shift(); }
+    last = ts;
+    const t0 = performance.now(); inner(ts); costs.push(performance.now() - t0); if(costs.length > 120) costs.shift();
+  };
+  setInterval(()=>{
+    if(!dts.length) return;
+    const a = dts.slice().sort((x,y)=>x-y), avg = a.reduce((x,y)=>x+y,0)/a.length, c = costs.reduce((x,y)=>x+y,0)/Math.max(1,costs.length);
+    hud.textContent = `${(1000/avg).toFixed(0)} fps · frame ${avg.toFixed(1)} ms (p95 ${a[Math.floor(a.length*.95)].toFixed(0)}, máx ${a[a.length-1].toFixed(0)})\nbucle JS ${c.toFixed(1)} ms · >33 ms: ${a.filter(x=>x>33).length}/${a.length}\nsimulación ${estado.simActiva ? 'activa' : 'en pausa'} · zoom ${map.getZoom()}`;
+  }, 500);
+}
+
 function actualizarTelemetria(lat,lon,hdg,stw,sog,cog,abat,deriva,prof,ukc){
-  document.getElementById('tLat').textContent = lat.toFixed(5)+'°';
-  document.getElementById('tLon').textContent = lon.toFixed(5)+'°';
-  document.getElementById('tHDG').textContent = hdg.toFixed(1)+'°';
-  document.getElementById('tSTW').textContent = (stw/0.5144).toFixed(1)+' kn';
-  document.getElementById('tSOG').textContent = (sog/0.5144).toFixed(1)+' kn';
-  document.getElementById('tCOG').textContent = cog.toFixed(1)+'°';
-  document.getElementById('tAbat').textContent = abat.toFixed(1)+'°';
-  document.getElementById('tDeriva').textContent = deriva.toFixed(1)+'°';
-  document.getElementById('tProf').textContent = prof.toFixed(1)+' m';
-  const ukcEl = document.getElementById('tUKC');
-  ukcEl.textContent = ukc.toFixed(1)+' m';
-  document.getElementById('rowUKC').className = 'row'+(ukc<1?' danger':ukc<3?' warn':'');
-  document.getElementById('tThrustP').textContent = (estado.thrP*100).toFixed(0)+'% @ '+Math.round(estado.azP)+'°'+(estado.manual?'':' (inactivo)');
-  document.getElementById('tThrustS').textContent = (estado.thrS*100).toFixed(0)+'% @ '+Math.round(estado.azS)+'°'+(estado.manual?'':' (inactivo)');
-  document.getElementById('tYaw').textContent = (estado.yawRate*R2D).toFixed(2)+' °/s';
-  document.getElementById('tMasa').textContent = (ship.mass/1000).toFixed(0)+' t';
-  document.getElementById('tMasaAdic').textContent = '+'+(ship.mass*ship.addedMassSwayCoef/1000).toFixed(0)+' / +'+(ship.mass*ship.addedMassSurgeCoef/1000).toFixed(0)+' t';
-  document.getElementById('tPotencia').textContent = '2×'+ship.potMotorKW.toFixed(0)+' kW · '+((ship.thrustMax/9800)).toFixed(0)+' t';
+  const t = (id, v) => setText($id(id), v);
+  t('tLat', lat.toFixed(5)+'°'); t('tLon', lon.toFixed(5)+'°');
+  t('tHDG', hdg.toFixed(1)+'°');
+  t('tSTW', (stw/0.5144).toFixed(1)+' kn'); t('tSOG', (sog/0.5144).toFixed(1)+' kn');
+  t('tCOG', cog.toFixed(1)+'°');
+  t('tAbat', abat.toFixed(1)+'°'); t('tDeriva', deriva.toFixed(1)+'°');
+  t('tProf', prof.toFixed(1)+' m'); t('tUKC', ukc.toFixed(1)+' m');
+  setCls($id('rowUKC'), 'row'+(ukc<1?' danger':ukc<3?' warn':''));
+  t('tThrustP', (estado.thrP*100).toFixed(0)+'% @ '+Math.round(estado.azP)+'°'+(estado.manual?'':' (inactivo)'));
+  t('tThrustS', (estado.thrS*100).toFixed(0)+'% @ '+Math.round(estado.azS)+'°'+(estado.manual?'':' (inactivo)'));
+  t('tYaw', (estado.yawRate*R2D).toFixed(2)+' °/s');
+  t('tMasa', (ship.mass/1000).toFixed(0)+' t');
+  t('tMasaAdic', '+'+(ship.mass*ship.addedMassSwayCoef/1000).toFixed(0)+' / +'+(ship.mass*ship.addedMassSurgeCoef/1000).toFixed(0)+' t');
+  t('tPotencia', '2×'+ship.potMotorKW.toFixed(0)+' kW · '+((ship.thrustMax/9800)).toFixed(0)+' t');
   const amb = leerAmbiente();
-  document.getElementById('tOla').textContent = amb.olaHs.toFixed(1)+' m';
+  t('tOla', amb.olaHs.toFixed(1)+' m');
   const fWind = 0.5*RHO_A*ship.cdWind*ship.windageArea*Math.pow(amb.vKn*0.5144,2);
-  document.getElementById('tFViento').textContent = (fWind/1000).toFixed(1)+' kN';
+  t('tFViento', (fWind/1000).toFixed(1)+' kN');
 }
 
 function verificarEncallamiento(ukc,prof){
   const warn = document.getElementById('shallowWarn');
   if(ukc<1.5 && ukc>=0 && !estado.alertaVoz){
     warn.style.display='flex';
-    hablar('Advertencia. Aguas poco profundas. Verifique el calado y el margen bajo quilla.');
+    hablar('Aguas poco profundas.');
     estado.alertaVoz=true;
   } else if(ukc>=1.5){ warn.style.display='none'; estado.alertaVoz=false; }
   if(ukc<0){
     pausarSim();
-    hablar('Alerta crítica. Buque encallado. Contacto con el fondo.');
+    hablar('Alerta crítica. Buque encallado.');
     document.getElementById('crashInfo').innerHTML = `Profundidad ${prof.toFixed(1)} m · Calado ${ship.T} m<br>UKC ${ukc.toFixed(2)} m`;
     document.getElementById('crashModal').style.display='flex';
     document.getElementById('crashBtn').focus();
@@ -2359,7 +2550,7 @@ document.querySelector('.tabs').addEventListener('keydown', e=>{
 });
 // Las capas flotantes viven dentro del contenedor de Leaflet: sin esto, arrastrar una
 // rueda o palanca de la consola también desplaza la carta, y la rueda del ratón hace zoom.
-['simDock','forceDiagram','gameCompass','cursorStatus'].forEach(id=>{
+['simDock','forceDiagram','vectorList','gameCompass','cursorStatus'].forEach(id=>{
   const el = document.getElementById(id);
   if(!el) return;
   L.DomEvent.disableClickPropagation(el);
@@ -2401,10 +2592,10 @@ function initOverview(){
   OV.map = L.map(el, {crs:L.CRS.EPSG3857, zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false,
     doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, tap:false, inertia:false});
   L.imageOverlay('map/z17-overview.webp', CHART_BOUNDS, {interactive:false}).addTo(OV.map);
-  OV.route = L.polyline([], {color:'#f97316', weight:2, dashArray:'4,3', opacity:.95, interactive:false}).addTo(OV.map);
-  OV.track = L.polyline([], {color:'#00d4ff', weight:2, opacity:.85, interactive:false}).addTo(OV.map);
+  OV.route = L.polyline([], {color:VCOL.route, weight:2, dashArray:'4,3', opacity:.95, interactive:false}).addTo(OV.map);
+  OV.track = L.polyline([], {color:VCOL.cog, weight:2, opacity:.85, interactive:false}).addTo(OV.map);
   OV.rect  = L.rectangle(map.getBounds(), {color:'#5fd6d0', weight:1.5, fillColor:'#5fd6d0', fillOpacity:.12, interactive:false}).addTo(OV.map);
-  const icon = L.divIcon({className:'', html:hullSVG('#4ade80').replace('width="30" height="30"','width="18" height="18"'), iconSize:[18,18], iconAnchor:[9,9]});
+  const icon = L.divIcon({className:'', html:hullSVG(VCOL.hdg).replace('width="30" height="30"','width="18" height="18"'), iconSize:[18,18], iconAnchor:[9,9]});
   OV.ship = L.marker(shipMarker ? shipMarker.getLatLng() : [CHART_BOUNDS[0][0],CHART_BOUNDS[0][1]], {icon, interactive:false, keyboard:false}).addTo(OV.map);
   OV.map.fitBounds(CHART_BOUNDS, {animate:false});
   OV.map.on('click', e=>{ setFollow(false); map.setView(e.latlng, map.getZoom(), {animate:false}); });
@@ -2455,6 +2646,13 @@ document.getElementById('ovToggle').addEventListener('click', ()=>setOverviewCol
 document.getElementById('ovMode').addEventListener('click', ()=>setOverviewMode(OV.mode === 'follow' ? 'full' : 'follow'));
 setInterval(()=>ovUpdate(false), 100);
 
+// Leyenda generada desde el mismo catálogo que dibuja el mapa: muestra de trazo + nombre.
+(function(){
+  const box = document.getElementById('legendList'); if(!box) return;
+  box.innerHTML = ASDVectors.CATALOG.filter(c => c.key !== 'thrust').map(c =>
+    `<div title="${c.abbr}">${ASDVectors.sampleSVG(c.key, VCOL[c.key])}<span>${c.name}</span></div>`).join('');
+})();
+
 // Zoom propio (misma barra que seguir y vista general): se desactiva en los límites de la carta.
 function syncZoomButtons(){
   document.getElementById('btnZoomIn').disabled  = map.getZoom() >= map.getMaxZoom();
@@ -2478,7 +2676,18 @@ function paintForceBtn(){
   const label = b.disabled ? 'Diagrama de fuerzas: no cabe en esta pantalla' : (FP.on ? 'Ocultar diagrama de fuerzas' : 'Mostrar diagrama de fuerzas');
   b.setAttribute('aria-label', label); b.title = label;
 }
-document.getElementById('btnForce').addEventListener('click', ()=>setForcePanel(!FP.on, true));
+document.getElementById('btnForce').addEventListener('click', ()=>{ setForcePanel(!FP.on, true); layoutCorner(); });   // la lista y las cifras se reparten según lo que quede abierto
+
+// Lista de valores de los vectores (#vectorList): otro botón de la barra la muestra u oculta.
+// Visible si está activada y cabe; si está activada pero no cabe, las cifras vuelven al canvas en formato compacto;
+// si el práctico la oculta, el canvas queda solo con flechas e iconos.
+const VL = { on:true };
+function paintVecBtn(){
+  const b = document.getElementById('btnVec');
+  const label = b.disabled ? 'Lista de vectores: no cabe en esta pantalla' : (VL.on ? 'Ocultar lista de vectores' : 'Mostrar lista de vectores');
+  b.setAttribute('aria-pressed', String(VL.on)); b.setAttribute('aria-label', label); b.title = label;
+}
+document.getElementById('btnVec').addEventListener('click', ()=>{ VL.on = !VL.on; paintVecBtn(); layoutCorner(); });
 
 // North arrow: se calcula con la proyección de la carta (dónde cae el norte en pantalla), no se supone.
 function updateNorthArrow(){
@@ -2492,10 +2701,10 @@ function updateNorthArrow(){
   el.setAttribute('aria-label', txt); el.title = txt;
   return ang;
 }
-map.on('move zoom resize', updateNorthArrow);
+map.on('zoomend resize', updateNorthArrow);   // EPSG:3857 no gira: el norte solo cambia al reencuadrar; con 'move' se reescribía en cada frame
 
 // Las capas flotantes comparten contenedor con Leaflet: aislarlas del mapa principal.
-['overview','mapTools','btnForce','northArrow'].forEach(id=>{
+['overview','mapTools','btnForce','btnVec','northArrow'].forEach(id=>{
   const el = document.getElementById(id); if(!el) return;
   L.DomEvent.disableClickPropagation(el);
   L.DomEvent.disableScrollPropagation(el);
@@ -2506,7 +2715,8 @@ map.on('move zoom resize', updateNorthArrow);
    - izquierda: radar + cursor (mismo ancho, --stack-w). Si junto a la consola no caben, suben por encima de ella.
    - derecha: barra de herramientas (zoom, seguir, vista general). Igual: si no cabe a un lado, sube sobre la consola.
    El radar cede ancho (190 -> 150 px) solo si hace falta para que quepa el diagrama de fuerzas encima. */
-const CORNER_MARGIN = 12, STACK_MAX = 190, STACK_MIN = 150, CURSOR_H = 50, GAP = 8, FD_TOP = 56, FD_NEED = 200, TOOLS_W = 38;
+const CORNER_MARGIN = 12, STACK_MAX = 190, STACK_MIN = 150, CURSOR_H = 50, GAP = 8, FD_TOP = 12, FD_NEED = 200, TOOLS_W = 38;
+const FD_FULL_H = 560, FD_COMPACT_H = 300, LIST_H = 150;   // alturas aproximadas del diagrama completo, compacto y de la lista
 function layoutCorner(){
   const mapEl = document.getElementById('map'), dock = document.getElementById('simDock');
   const W = mapEl.clientWidth, H = mapEl.clientHeight, dw = dock.offsetWidth, dh = dock.offsetHeight;
@@ -2523,15 +2733,31 @@ function layoutCorner(){
   const d = Math.round(Math.max(STACK_MIN, Math.min(STACK_MAX, room)));
   mapEl.style.setProperty('--stack-w', d + 'px');
 
-  // El diagrama de fuerzas llega hasta el borde superior del radar; si no cabe entero, su cuerpo se desplaza.
+  // La pila de fuerzas (diagrama + lista de vectores) llega hasta el borde superior del radar.
   const fdMax = Math.max(0, H - below - d - GAP - FD_TOP - GAP);
   mapEl.style.setProperty('--fd-max', fdMax + 'px');
-  const fd = document.getElementById('forceDiagram'), btnF = document.getElementById('btnForce');
-  fd.classList.toggle('compact', fdMax < 370); fd.classList.toggle('tiny', fdMax < 150);
+  const fd = document.getElementById('forceDiagram'), btnF = document.getElementById('btnForce'), list = document.getElementById('vectorList');
   btnF.disabled = fdMax < 150 || W <= 600;   // a 600 px o menos taparía la brújula
   paintForceBtn();
   if(!FP.userSet) setForcePanel(W >= 900 && !btnF.disabled, false);
+  const showFd = FP.on && !btnF.disabled;
+  const btnV = document.getElementById('btnVec');
+  const canList = W > 600 && fdMax >= LIST_H;                             // la lista, sola, cabe
+  const listFits = canList && (!showFd || fdMax >= FD_COMPACT_H + GAP + LIST_H);   // y, con el diagrama abierto, cabe debajo de él
+  btnV.disabled = !canList; paintVecBtn();
+  const showList = VL.on && listFits;
+  list.hidden = !showList;
+  fd.classList.toggle('compact', (showList ? fdMax - LIST_H - GAP : fdMax) < FD_FULL_H);
+  fd.classList.toggle('tiny', fdMax < 150);
+  fd.classList.toggle('small', (showList ? fdMax - LIST_H - GAP : fdMax) < 300);
+  // Sin lista visible, las cifras de los vectores vuelven al canvas en formato compacto: el dato nunca se pierde.
+  window.__tagsMode = !VL.on || showList ? 'none' : 'compact';
+  // La brújula se corre a la derecha lo justo para no pisar la pila de fuerzas (arriba a la izquierda).
+  const gc = document.getElementById('gameCompass'), stackR = (showFd || showList) ? 12 + 196 + 8 : 0;
+  const cLeft = (W - gc.offsetWidth)/2;
+  mapEl.style.setProperty('--compass-shift', Math.max(0, Math.round(stackR - cLeft)) + 'px');
   if(!OV.userSet) setOverviewCollapsed(W < 760, false);
+  if(window.BridgeFeed) BridgeFeed.place({ W, H, dw, dh, raised, stackW:d });
 }
 if(window.ResizeObserver){
   const ro = new ResizeObserver(layoutCorner);
@@ -2570,9 +2796,11 @@ initRosaZoom();
 <script src="js/config.js"></script>
 <script>if(/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) document.write('<script src="js/config.local.js"><\/script>');</script>
 <script src="js/orders.js"></script>
+<script src="js/grammar.js"></script>
 <script src="js/voice-tools.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/sim-api.js"></script>
 <script src="js/voice.js"></script>
+<script src="js/feed.js"></script>
 </body>
 </html>

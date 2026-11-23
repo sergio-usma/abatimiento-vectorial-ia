@@ -17,13 +17,17 @@ Todo se sintetiza con Web Audio (sin archivos ni librerías): clics de interfaz,
 
 ## Control por voz: órdenes de puente (OpenAI Realtime)
 
-Tú eres el práctico; **Marina** es la timonel y maquinista. Das órdenes normalizadas (IMO SMCP y órdenes estándar de timón) en **español o inglés** y ella las repite y las ejecuta. No manejas los azimutales: el simulador los resuelve con la lógica interna de los controles.
+Tú eres el práctico; **Marina** es la timonel y maquinista. Das órdenes normalizadas (IMO SMCP y órdenes estándar de timón y máquinas) en **español o inglés**. Ella ejecuta **exactamente** lo que ordenas, la repite con una frase fija y breve, y no hace nada más: nunca improvisa, no conversa y solo da informes o recomendaciones si se los pides.
+
+**Cómo funciona (una sola vuelta).** El modelo **oye** el audio y responde solo con una llamada a herramienta (`tool_choice: required`, salida de texto: no habla ni escribe prosa). Esa llamada se valida contra `data/bridge-commands.json`: si la orden no existe en la base, **no se ejecuta** ("Repita."). Si existe, se ejecuta al instante y Marina la repite con una frase fija y breve generada localmente, con la voz del navegador (sin segunda vuelta al modelo; hay una opción para usar la voz natural de OpenAI, más lenta). La transcripción llega en paralelo, solo muestra "Oí: …" y avisa si lo oído era otra orden de la base. Una cifra dicha como número ("rumbo treinta") es `unclear`: los rumbos van por dígitos. Las órdenes de rumbo no cambian las máquinas (la potencia se mantiene hasta que ordenes máquinas) y no desactivan el piloto automático ni sacan de deriva libre: se informa y no se hace nada. Sin que se lo pidas, Marina solo habla para una **alarma crítica** (varada, UKC crítico) y para "rumbo alcanzado". La práctica escrita y la guía usan la gramática local (`js/grammar.js`), sin conexión.
+
+**Ampliar la base.** Cada entrada de `data/bridge-commands.json` tiene `id`, `tool` (herramienta de `js/voice-tools.js`), `args` con huecos tipados (`{heading}`, `{deg}`, `{angle}`, `{kn}`, `{dir}`, `{side}`, `{speed}`), patrones `es` y `en` (expresiones regulares sobre texto normalizado, con `%MACROS%`), la frase `say` que Marina repite y `examples`. `node --test tests/` comprueba que cada ejemplo resuelve a su propia orden, que no hay ambigüedades y que `parse` tarda menos de 5 ms. La Guía de voz del panel se genera de esa misma base.
 
 - **Hablar:** mantén la tecla `V` o el botón del micrófono (cabecera). Suelta para enviar.
 - **Manos libres:** actívalo en *Voz e IA*; solo actúa si la frase empieza con "Marina". Apagado por defecto.
-- **Escribir:** el campo "Escribir orden" y los botones de la **Guía de voz** (panel derecho, último grupo) envían la frase sin micrófono.
+- **Escribir:** el campo "Práctica sin voz" y los botones de la **Guía de voz** (panel derecho, último grupo) pasan por la misma gramática, sin micrófono y sin conexión.
 - **Mando:** una orden de rumbo o máquinas bloquea los controles manuales. "Control manual" / "Take the con" los devuelve. Sigue la derrota (piloto) las reemplaza.
-- **Circuito cerrado:** Marina repite la orden y, cuando el HDG llega al rumbo ordenado, informa ("Rumbo cero nueve cero, así").
+- **Circuito cerrado:** Marina repite la orden y, cuando el HDG llega al rumbo ordenado, informa ("Rumbo cero nueve cero, así"). En el panel de puente verás lo que oyó ("Oí: …").
 
 | Tipo | Español | English |
 |---|---|---|
@@ -34,8 +38,13 @@ Tú eres el práctico; **Marina** es la timonel y maquinista. Das órdenes norma
 | Viento (siempre *desde*) | "Aumenta viento a 40 nudos por el Este", "Viento por el 045" | "Increase wind to 40 knots from the east" |
 | Corriente | "Incrementa corriente 1 nudo por el 003" (*desde* 003), "…hacia el 180" | "Increase current 1 knot from 003" |
 | Sistema | "Control manual", "Sigue la derrota", "Informa el estado" | "Take the con", "Follow the route", "Report status" |
+| Deriva y caída | "¿Cómo cae la proa?", "Informe de deriva", "Recomendación" | "How is the bow falling?", "Report drift" |
 
-Los rumbos son de tres dígitos ("cero cero cinco"). "A N" fija el valor; "en N" lo incrementa. Reiniciar todo, borrar la derrota y ubicar el buque piden un "confirmo" hablado (o los botones Sí/No en pantalla).
+**Diagrama de fuerzas y velocidad transversal.** El diagrama (botón de vectores en la barra de la carta) se calcula cada frame con *todas* las fuerzas de `calcularFuerzas()`: un **chorro de agua por propulsor** (en su posición real, hacia donde sale el agua: azimut + 180°; el largo es el % de máquinas), el **empuje** (suma vectorial de los dos), el viento, el agua (corriente y oleaje) y la **fuerza neta**. Los cuatro triángulos (amura y aleta de estribor en verde, de babor en rojo) son los *vectores de velocidad transversal* de proa y popa sobre el fondo, `V = v ± r·L/2`, en nudos. Otro botón de la barra muestra u oculta la lista de valores de los vectores. Marina informa de abatimiento, deriva y caída y da una **sugerencia** (nunca actúa). Fórmulas en `js/forces.js`.
+
+Los rumbos se dicen y se leen siempre dígito a dígito: 030 = "cero tres cero", 305 = "tres cero cinco". "A N" fija el valor; "en N" lo incrementa. Reiniciar todo, borrar la derrota y ubicar el buque piden un "confirmo" hablado. Escribir una orden o pulsar una frase de la guía es **práctica sin voz**.
+
+**Rendimiento.** Abre la app con `?perf` para ver fps, ms por frame y el coste del bucle. El bucle principal dibuja primero todos los canvas y después toca el DOM, limita a 20-30 Hz lo que no necesita más, escribe texto solo si cambió y mueve la cámara con un único `panBy` por frame.
 
 Las herramientas están en `js/voice-tools.js`, la lógica de gobierno en `js/orders.js` (tabla `TELEGRAPH` y ganancias ajustables) y se prueban con `node --test tests/`.
 

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-22T23:22:49.000Z",
+  "generatedAt": "2026-11-23T01:43:17.000Z",
   "title": "Design System: ASD Bridge Simulator",
   "extensions": {
     "colorMeta": {
@@ -243,6 +243,111 @@
           "#dad9f5",
           "#e8ecf7"
         ]
+      },
+      "v-hdg": {
+        "role": "secondary",
+        "displayName": "Heading Green",
+        "canonical": "#4ade80",
+        "tonalRamp": [
+          "#0b2113",
+          "#1a4e2d",
+          "#2c854d",
+          "#3fbd6d",
+          "#4ade80",
+          "#80e8a6",
+          "#aef0c6",
+          "#dbf8e6"
+        ]
+      },
+      "v-cog": {
+        "role": "secondary",
+        "displayName": "Course Cyan",
+        "canonical": "#22d3ee",
+        "tonalRamp": [
+          "#052024",
+          "#0c4a53",
+          "#147f8f",
+          "#1db3ca",
+          "#22d3ee",
+          "#64e0f3",
+          "#9cebf7",
+          "#d3f6fc"
+        ]
+      },
+      "v-cts": {
+        "role": "secondary",
+        "displayName": "Steer Lilac",
+        "canonical": "#b48cf2",
+        "tonalRamp": [
+          "#1b1524",
+          "#3f3155",
+          "#6c5491",
+          "#9977ce",
+          "#b48cf2",
+          "#caaef6",
+          "#ddcbf9",
+          "#f0e8fc"
+        ]
+      },
+      "v-wind": {
+        "role": "tertiary",
+        "displayName": "Wind White",
+        "canonical": "#e2e8f0",
+        "tonalRamp": [
+          "#222324",
+          "#4f5154",
+          "#888b90",
+          "#c0c5cc",
+          "#e2e8f0",
+          "#ebeff4",
+          "#f2f5f8",
+          "#f9fafc"
+        ]
+      },
+      "v-current": {
+        "role": "tertiary",
+        "displayName": "Current Blue",
+        "canonical": "#3b82f6",
+        "tonalRamp": [
+          "#091425",
+          "#152e56",
+          "#234e94",
+          "#326ed1",
+          "#3b82f6",
+          "#76a8f9",
+          "#a7c7fb",
+          "#d8e6fd"
+        ]
+      },
+      "v-drift": {
+        "role": "tertiary",
+        "displayName": "Drift Yellow",
+        "canonical": "#facc15",
+        "tonalRamp": [
+          "#261f03",
+          "#584707",
+          "#967a0d",
+          "#d4ad12",
+          "#facc15",
+          "#fcdb5b",
+          "#fde896",
+          "#fef5d0"
+        ]
+      },
+      "v-route": {
+        "role": "tertiary",
+        "displayName": "Route Orange",
+        "canonical": "#f97316",
+        "tonalRamp": [
+          "#251103",
+          "#572808",
+          "#95450d",
+          "#d46213",
+          "#f97316",
+          "#fb9d5c",
+          "#fcc096",
+          "#fee3d0"
+        ]
       }
     },
     "typographyMeta": {
@@ -260,19 +365,19 @@
       },
       "numeral": {
         "displayName": "Numeral",
-        "purpose": "Every readout, input value and scale, DM Mono tabular; compass tape and canvas labels at 11-12px."
+        "purpose": "Every readout, input value and scale, DM Mono tabular; heading tape readouts and canvas tags at 11-12px."
       }
     },
     "shadows": [
       {
         "name": "float",
         "value": "0 10px 28px rgba(0,0,0,.4)",
-        "purpose": "Floating HUD panels over the chart."
+        "purpose": "Floating HUD panels over the chart: heading tape, force model, bridge feed, overview, dock."
       },
       {
         "name": "map-control",
         "value": "0 6px 18px rgba(0,0,0,.4)",
-        "purpose": "Zoom bar and mini rose."
+        "purpose": "Map toolbar, force toggle button and mini rose."
       },
       {
         "name": "popup",
@@ -300,6 +405,16 @@
         "name": "pulse",
         "value": "opacity to .55, 1.1s ease-in-out infinite",
         "purpose": "High correction banner and shallow warning only; disabled under reduced motion."
+      },
+      {
+        "name": "feed-in",
+        "value": ".22s var(--ease), translateY(8px) to 0",
+        "purpose": "Bridge feed entrance; disabled under reduced motion."
+      },
+      {
+        "name": "equaliser",
+        "value": ".7s to 1.3s ease-in-out infinite",
+        "purpose": "Marina voice bars (listening, speaking, thinking); disabled under reduced motion."
       }
     ],
     "breakpoints": [
@@ -316,10 +431,6 @@
         "value": "760px (container query on the chart)"
       },
       {
-        "name": "chart-force-hide",
-        "value": "600px (container query on the chart; force model hidden)"
-      },
-      {
         "name": "chart-narrow",
         "value": "480px (container query on the chart)"
       },
@@ -330,39 +441,83 @@
       {
         "name": "viewport-mobile",
         "value": "760px"
+      },
+      {
+        "name": "chart-force-hide",
+        "value": "600px (container query on the chart; force model hidden)"
+      },
+      {
+        "name": "feed-side",
+        "value": "side gap >= 230px between dock and toolbar (BridgeFeed.place)"
+      },
+      {
+        "name": "feed-above",
+        "value": "above the dock beside the toolbar, 160-236px, chart wider than 480px"
+      },
+      {
+        "name": "feed-top",
+        "value": "top strip under the heading tape on phones"
       }
     ],
-    "chartOverlayColors": [
+    "vectorLanguage": [
       {
-        "name": "cog",
-        "value": "#00d4ff"
+        "key": "hdg",
+        "token": "--v-hdg",
+        "value": "#4ade80",
+        "shape": "solid",
+        "tag": "HDG"
       },
       {
-        "name": "cts",
-        "value": "#b48cf2"
+        "key": "cog",
+        "token": "--v-cog",
+        "value": "#22d3ee",
+        "shape": "dashed, length proportional to SOG",
+        "tag": "COG"
       },
       {
-        "name": "correction-route",
-        "value": "#f97316"
+        "key": "cts",
+        "token": "--v-cts",
+        "value": "#b48cf2",
+        "shape": "dotted with ring",
+        "tag": "CTS"
       },
       {
-        "name": "current",
-        "value": "#a78bfa"
+        "key": "wind",
+        "token": "--v-wind",
+        "value": "#e2e8f0",
+        "shape": "barbed",
+        "tag": "VIENTO"
       },
       {
-        "name": "buoy-red",
-        "value": "#ef4444"
+        "key": "current",
+        "token": "--v-current",
+        "value": "#3b82f6",
+        "shape": "wavy",
+        "tag": "CORRIENTE"
       },
       {
-        "name": "buoy-green",
-        "value": "#4ade80"
+        "key": "drift",
+        "token": "--v-drift",
+        "value": "#facc15",
+        "shape": "wedge",
+        "tag": "DERIVA"
       },
       {
-        "name": "buoy-yellow",
-        "value": "#fbbf24"
+        "key": "route",
+        "token": "--v-route",
+        "value": "#f97316",
+        "shape": "route line",
+        "tag": "DERROTA"
+      },
+      {
+        "key": "thrust",
+        "token": "--v-thrust",
+        "value": "#5fd6d0",
+        "shape": "thick",
+        "tag": "EMPUJE"
       }
     ],
-    "chartOverlayColorsNote": "Named exception tied to map vectors, compass tape, Chart.js series and legend swatches. Intentionally off the console tokens; detector reports are expected."
+    "vectorLanguageNote": "Single source: :root --v-* tokens read by ASDVectors.CATALOG/colors() in js/vectors.js; port and starboard are --port/--stbd everywhere."
   },
   "components": [
     {
@@ -438,30 +593,58 @@
       "css": ".ds-thr{display:inline-block;margin-right:20px} .ds-thr.port{--c:#f4948b} .ds-thr.stbd{--c:#aede90} .ds-unit-title{display:flex;align-items:center;gap:7px;font:800 11px 'Manrope',system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;color:var(--c)} .ds-unit-title::before{content:'';width:8px;height:8px;border-radius:50%;background:currentColor}"
     },
     {
-      "name": "Force Model Pill",
+      "name": "Force Model Panel",
       "kind": "custom",
       "refersTo": "hud-panel",
-      "description": "Collapsible floating panel under the zoom control; 11px uppercase summary with rotating chevron.",
-      "html": "<details class=\"ds-fd\" open><summary>Fuerzas</summary><div class=\"ds-fd-body\">Canvas 174 x 150</div></details>",
-      "css": ".ds-fd{width:196px;background:rgba(8,21,30,.93);border:1px solid rgba(158,205,214,.28);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.4);color:#a7bfc4} .ds-fd>summary{display:flex;align-items:center;min-height:34px;padding:0 12px;list-style:none;cursor:pointer;font:800 11px 'Manrope',system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#a7bfc4} .ds-fd>summary::-webkit-details-marker{display:none} .ds-fd>summary:hover{color:#e6efef} .ds-fd>summary:focus-visible{outline:2px solid #5fd6d0;outline-offset:2px} .ds-fd-body{padding:0 10px 10px;font:12px 'Manrope',system-ui,sans-serif}"
+      "description": "Floating panel under the 36px force-diagram toggle button.",
+      "html": "<div class=\"ds-fd\"><div class=\"ds-fd-h\">Fuerzas</div><div class=\"ds-fd-b\">Canvas 174 x 150</div></div>",
+      "css": ".ds-fd{width:196px;background:rgba(8,21,30,.93);border:1px solid rgba(158,205,214,.28);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.4);color:#a7bfc4} .ds-fd-h{display:flex;align-items:center;min-height:30px;padding:0 12px;font:800 11px \"Manrope\",system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#a7bfc4} .ds-fd-b{padding:0 10px 10px;font:12px \"Manrope\",system-ui,sans-serif}"
+    },
+    {
+      "name": "Heading Tape",
+      "kind": "custom",
+      "refersTo": "hud-panel",
+      "description": "Slim top-center panel: tape plus HDG, COG, CTS readouts with vector dots.",
+      "html": "<div class=\"ds-tape\"><div class=\"ds-tape-bar\"></div><div class=\"ds-ro\"><span class=\"ds-hdg\"><i></i>HDG <b>045</b></span><span class=\"ds-cog\"><i></i>COG <b>052</b></span><span class=\"ds-cts\"><i></i>CTS <b>060</b></span></div></div>",
+      "css": ".ds-tape{width:300px;padding:6px 12px 8px;background:rgba(8,21,30,.93);border:1px solid rgba(158,205,214,.28);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.4)} .ds-tape-bar{height:42px;border-bottom:1px solid rgba(158,205,214,.28)} .ds-ro{display:flex;justify-content:center;gap:10px;margin-top:2px;font:500 12px \"DM Mono\",ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#84a0a8;white-space:nowrap} .ds-ro i{display:inline-block;width:7px;height:7px;margin-right:4px;border-radius:50%;background:var(--d)} .ds-ro b{font-weight:500} .ds-hdg{--d:#4ade80} .ds-hdg b{color:#4ade80} .ds-cog{--d:#22d3ee} .ds-cog b{color:#22d3ee} .ds-cts{--d:#b48cf2} .ds-cts b{color:#b48cf2}"
+    },
+    {
+      "name": "Bridge Feed",
+      "kind": "card",
+      "refersTo": "bridge-feed",
+      "description": "Floating stack: route guide, active order with ring, Marina voice, confirmation.",
+      "html": "<div class=\"ds-feed\"><div class=\"ds-sec\"><span class=\"ds-k\">Orden</span><span class=\"ds-ord\">Rumbo 090</span></div><div class=\"ds-sec ds-voice\"><span class=\"ds-av\">M</span><span class=\"ds-vn\">Marina<small>Escuchando</small></span></div></div>",
+      "css": ".ds-feed{width:236px;background:rgba(8,21,30,.93);border:1px solid rgba(158,205,214,.28);border-radius:10px;box-shadow:0 10px 28px rgba(0,0,0,.4)} .ds-sec{display:flex;flex-direction:column;gap:2px;padding:9px 11px} .ds-sec+.ds-sec{border-top:1px solid rgba(158,205,214,.13)} .ds-k{font:800 11px \"Manrope\",system-ui,sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#84a0a8} .ds-ord{font:500 14px \"DM Mono\",ui-monospace,monospace;color:#b48cf2} .ds-voice{flex-direction:row;align-items:center;gap:9px} .ds-av{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:#112431;border:1px solid #5fd6d0;font:800 14px \"Manrope\",system-ui,sans-serif;color:#e6efef} .ds-vn{display:flex;flex-direction:column;font:800 13px \"Manrope\",system-ui,sans-serif;color:#e6efef} .ds-vn small{font:600 11px \"Manrope\",system-ui,sans-serif;color:#84a0a8}"
+    },
+    {
+      "name": "Map Toolbar",
+      "kind": "custom",
+      "refersTo": "map-tool",
+      "description": "Vertical hairline-separated icon tools, bottom-right of the chart; pressed tints cyan.",
+      "html": "<div class=\"ds-tools\"><button class=\"ds-tool\" aria-label=\"Acercar\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\" stroke-linecap=\"round\"><path d=\"M8 3v10M3 8h10\"/></svg></button><span class=\"ds-sep\"></span><button class=\"ds-tool\" aria-pressed=\"true\" aria-label=\"Seguir buque\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.75\"><circle cx=\"8\" cy=\"8\" r=\"4\"/><path d=\"M8 1v3M8 12v3M1 8h3M12 8h3\" stroke-linecap=\"round\"/></svg></button></div>",
+      "css": ".ds-tools{display:flex;flex-direction:column;width:38px;overflow:hidden;background:rgba(8,21,30,.93);border:1px solid rgba(158,205,214,.28);border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.4)} .ds-tool{display:grid;place-items:center;width:36px;height:36px;padding:0;border:0;background:transparent;color:#a7bfc4;cursor:pointer;transition:background .15s,color .15s} .ds-tool:hover{background:#183242;color:#e6efef} .ds-tool:focus-visible{outline:2px solid #5fd6d0;outline-offset:-3px} .ds-tool[aria-pressed=true]{color:#5fd6d0;background:rgba(95,214,208,.13)} .ds-sep{display:block;height:1px;margin:3px 7px;background:rgba(158,205,214,.28)}"
+    },
+    {
+      "name": "Vector Legend Row",
+      "kind": "custom",
+      "refersTo": "readout-row",
+      "description": "Legend and telemetry row with a colour dot from the Vector Language.",
+      "html": "<div class=\"ds-leg\"><div class=\"ds-lr\" style=\"--d:#4ade80\"><span>Proa</span><b>045.0</b></div><div class=\"ds-lr\" style=\"--d:#facc15\"><span>Deriva</span><b>3.2</b></div></div>",
+      "css": ".ds-leg{width:260px;background:rgba(158,205,214,.13);border:1px solid rgba(158,205,214,.13);border-radius:6px;overflow:hidden;display:grid;gap:1px} .ds-lr{display:flex;justify-content:space-between;align-items:baseline;padding:6px 9px;background:#0c1c27} .ds-lr span{font:600 12px \"Manrope\",system-ui,sans-serif;color:#84a0a8} .ds-lr span::before{content:\"\";display:inline-block;width:8px;height:8px;margin-right:7px;border-radius:50%;background:var(--d)} .ds-lr b{font:500 13px \"DM Mono\",ui-monospace,monospace;font-variant-numeric:tabular-nums;color:#e6efef}"
     }
   ],
   "narrative": {
     "northStar": "The Night Bridge Console",
-    "overview": "One instrument, not a form. The chart is the stage and the ASD console and vector readouts are the product. The system is an integrated bridge display at night: a navy-teal ground, hairline-edged panels, tabular numerals, and color that carries meaning (port, starboard, caution, alarm) rather than decoration. It is built for large bridge screens in low light, so contrast is generous and the text floor is 11px.\n\nDensity is high but quiet. Setup lives in collapsible groups and two-column fields; help text hides behind a small info toggle rather than sitting as paragraphs. Floating HUD elements sit on the chart (compass top-center, a collapsible force-model pill top-left under the zoom control at top 100px / left 12px, rose top-right, ASD dock bottom-center) so drift and forces are read without scrolling. Groups that serve a secondary task, such as Derrota, start closed.",
+    "overview": "One instrument, not a form. The chart is the stage and the ASD console and vector readouts are the product. The system is an integrated bridge display at night: a navy-teal ground, hairline-edged panels, tabular numerals, and color that carries meaning (port, starboard, caution, alarm) rather than decoration. It is built for large bridge screens in low light, so contrast is generous and the text floor is 11px.\n\nDensity is high but quiet. Setup lives in collapsible groups and two-column fields; help text hides behind a small info toggle rather than sitting as paragraphs. Floating HUD elements sit on the chart (a slim heading tape top-center, a force-diagram toggle button top-left with its panel under it, a computed north arrow top-right with the overview window below it, a map toolbar bottom-right, the ASD dock bottom-center, a radar and cursor readout bottom-left) so drift and forces are read without scrolling. A bridge feed (route guide, active order, Marina voice, confirmation) floats between the dock and the toolbar and exists only while there is something to say. Groups that serve a secondary task, such as Derrota, start closed.",
     "keyCharacteristics": [
       "Three-column shell: 296px setup accordion, full-bleed chart, 304px telemetry; 48px top bar.",
       "Tonal depth: four navy surface steps and 1px hairlines, with shadows reserved for floating layers.",
       "DM Mono tabular numerals for every value; Manrope for labels and actions.",
       "One cyan accent for selection and the primary action; port red and starboard green identify sides.",
+      "One Vector Language: every physical quantity has its own color, its own shape and a labelled tag, from one token set read by both CSS and canvas.",
       "Drawn SVG line icons (16px, 1.75 stroke), no emoji."
     ],
     "rules": [
-      {
-        "name": "Chart overlay colors (named exception)",
-        "body": "Map vectors, compass tape, Chart.js series and legend swatches use brighter hues (#00d4ff, #b48cf2, #f97316, #a78bfa, buoy fills) so they read over the light chart. They are off the console tokens by design; never use them for console chrome.",
-        "section": "colors"
-      },
       {
         "name": "The Meaning-Only Color Rule",
         "body": "Port red, starboard green, amber, coral and violet appear only when they encode side, state, alarm or the AI. They are never decorative fills.",
@@ -470,6 +653,11 @@
       {
         "name": "The One Accent Rule",
         "body": "Cyan alone marks selection, focus and the single primary action on screen.",
+        "section": "colors"
+      },
+      {
+        "name": "The Vector Language Rule",
+        "body": "One quantity, one colour, one shape, one labelled tag. Every arrow on the chart carries its name and value, and a vector colour is never reused for another quantity or for chrome. New vectors are added to the catalogue (token, shape, tag), never hard-coded in a draw call.",
         "section": "colors"
       },
       {
@@ -489,21 +677,22 @@
       }
     ],
     "dos": [
-      "Do use the surface steps (#08151e to #183242) and 1px hairlines to separate regions.",
-      "Do set every changing number in DM Mono with tabular figures.",
-      "Do reserve cyan (#5fd6d0) for selection, focus and the one primary action.",
-      "Do keep port red and starboard green bound to their side; use amber for warnings and coral for alarms.",
-      "Do keep help text behind the small info toggle, and keep all text, including canvas and chart labels, at 11px or larger.",
-      "Do draw icons as 16px, 1.75-stroke SVG line glyphs.",
-      "Do honor reduced motion: only the correction banner, shallow warning and sea overlay animate.",
-      "Do keep chart overlay colors on the map vectors and legend only."
+      "**Do** use the surface steps (#08151e to #183242) and 1px hairlines to separate regions.",
+      "**Do** set every changing number in DM Mono with tabular figures.",
+      "**Do** reserve cyan (#5fd6d0) for selection, focus and the one primary action.",
+      "**Do** keep port red and starboard green bound to their side; use amber for warnings and coral for alarms.",
+      "**Do** keep help text behind the small info toggle, and keep all text, including canvas and chart labels, at 11px or larger.",
+      "**Do** draw every chart vector from the Vector Language catalogue with its shape and a labelled tag, and use `--port` and `--stbd` for sides everywhere.",
+      "**Do** draw icons as 16px, 1.75-stroke SVG line glyphs.",
+      "**Do** honor reduced motion: the correction banner, shallow warning, sea overlay, feed entrance, mic pulse, equaliser and order ring animate only without it."
     ],
     "donts": [
-      "Don't put paragraphs of help text or a stacked form in the sidebar.",
-      "Don't use emoji or icon fonts as icons.",
-      "Don't add shadows to docked panels or use hard offset shadows.",
-      "Don't use saturated color as decoration; it must encode side, state or alarm.",
-      "Don't set body prose in DM Mono or numerals in Manrope."
+      "**Don't** put paragraphs of help text or a stacked form in the sidebar.",
+      "**Don't** use emoji or icon fonts as icons.",
+      "**Don't** add shadows to docked panels or use hard offset shadows.",
+      "**Don't** use saturated color as decoration; it must encode side, state or alarm.",
+      "**Don't** reuse a vector color for another quantity or for console chrome, and don't show a vector without its tag.",
+      "**Don't** set body prose in DM Mono or numerals in Manrope."
     ]
   }
 }

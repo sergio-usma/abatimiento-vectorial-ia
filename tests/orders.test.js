@@ -163,3 +163,41 @@ test('fromThrust: hereda la orden de máquinas más parecida a la potencia previ
   assert.equal(O.fromThrust(0.5, -1), 'half_astern');
   assert.equal(O.fromThrust(1, -1), 'full_astern');
 });
+
+test('hold: una orden de rumbo desde el mando manual mantiene la potencia tal cual, sin inventar una orden de máquinas', () => {
+  const c = O.create();
+  c.seed(0.42, 1); c.steerCourse(90);
+  assert.equal(c.state.telegraph, 'hold');
+  const e = c.telegraphEntry();
+  assert.equal(e.f, 0.42); assert.equal(e.dir, 1); assert.equal(e.label, 'Hold power');
+  const u = c.step({ ship, hdgDeg: 0, yawRateRad: 0, dt: 0.1 });
+  assert.ok(Math.abs(u.T0 - 0.42 * ship.thrustMax * 0.5) < 1e-6);
+  assert.match(c.describe(), /090°/);
+});
+
+test('hold: solo una orden de máquinas cambia la potencia; seed no pisa una orden ya activa', () => {
+  const c = O.create();
+  c.seed(0.42, 1); c.steerCourse(90);
+  c.engine('slow_ahead');
+  assert.equal(c.telegraphEntry().f, 0.30);
+  c.seed(0.9, -1);                                  // ya activa: se ignora
+  assert.equal(c.telegraphEntry().f, 0.30);
+  c.release(); assert.equal(c.state.holdF, 0);
+});
+
+test('hold: marcha atrás mantenida conserva el sentido', () => {
+  const c = O.create(); c.seed(0.3, -1); c.steerCourse(10);
+  const u = c.step({ ship, hdgDeg: 0, yawRateRad: 0, dt: 0.1 });
+  assert.equal(u.phi, 180);
+});
+
+test('rumbos por dígito: 000, 005, 030, 090, 305, 359 en español e inglés', () => {
+  const s = d => O.spokenHeading(d);
+  assert.equal(s(0).es, 'cero cero cero'); assert.equal(s(0).en, 'zero zero zero');
+  assert.equal(s(5).es, 'cero cero cinco');
+  assert.equal(s(30).es, 'cero tres cero'); assert.equal(s(30).en, 'zero three zero');
+  assert.equal(s(90).es, 'cero nueve cero');
+  assert.equal(s(305).es, 'tres cero cinco'); assert.equal(s(305).en, 'three zero five');
+  assert.equal(s(359).es, 'tres cinco nueve');
+  assert.equal(s(-10).digits, '350'); assert.equal(s(360).digits, '000');
+});

@@ -17,6 +17,8 @@
   const POINTS = { N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5, S:180, SSW:202.5, SW:225, WSW:247.5, W:270, WNW:292.5, NW:315, NNW:337.5 };
   const POINT_ENUM = Object.keys(POINTS);
   const ENGINE_ORDERS = ['full_ahead','half_ahead','slow_ahead','dead_slow_ahead','stop','dead_slow_astern','slow_astern','half_astern','full_astern'];
+  /* Herramientas de solo lectura: lo único que puede llamar el asesor (turnos disparados por un evento del sistema). */
+  const READ_ONLY = ['get_status', 'drift_report'];
   const HELM_ORDERS = ['port','starboard','hard_port','hard_starboard','midships','steady'];
 
   const POINT_PROP = { type:'string', enum:POINT_ENUM, description:'Punto cardinal (N, NE, E, SE, S, SW, W, NW y los intermedios NNE, ENE…). "Oeste" = W, "Este" = E.' };
@@ -70,6 +72,9 @@
     { type:'function', name:'get_status',
       description:'Lee el estado: rumbo actual y ordenado, orden de máquinas, velocidades, abatimiento, profundidad, UKC, derrota y alarmas. Úsala para cualquier pregunta sobre el estado ("¿cuál es el rumbo?", "report status"); no inventes valores.',
       parameters:{ type:'object', properties:{} } },
+    { type:'function', name:'drift_report',
+      description:'Informe de solo lectura sobre abatimiento, deriva y CAÍDA de la proa y de la popa (grados y banda), fuerza lateral equivalente en cada extremo calculada con todas las fuerzas (propulsores, viento, agua), causa principal y una recomendación para mantener el rumbo. Úsala para "¿cómo cae la proa?", "informe de deriva", "recomendación", "report drift". La recomendación es solo una sugerencia: no ejecuta nada.',
+      parameters:{ type:'object', properties:{} } },
     { type:'function', name:'confirm_action',
       description:'Ejecuta la acción crítica pendiente SOLO después de que el usuario diga "confirmo", "sí, hazlo", "confirm" o equivalente. Pasa el token recibido.',
       parameters:{ type:'object', properties:{ token:{ type:'string' } }, required:['token'] } }
@@ -107,7 +112,7 @@
     function needConfirm(key, name, args){
       const token = 'c' + (++counter) + '_' + Math.random().toString(36).slice(2, 6);
       pending = { token, key, name, args, turn: userTurns, expires: now() + CONFIRM_TTL_MS, summary: CRITICAL[key](args) };
-      return { status:'needs_confirmation', token, summary: pending.summary, message:`Pide confirmación al usuario: "${pending.summary}". Espera su "confirmo".` };
+      return { status:'needs_confirmation', token, key, summary: pending.summary, message:`Pide confirmación al usuario: "${pending.summary}". Espera su "confirmo".` };
     }
     function runCritical(p){
       if(p.key === 'sim_reset') return sim.simControl('reset');
@@ -199,6 +204,7 @@
       },
       ui(a){ return sim.ui(a); },
       get_status(){ return Object.assign({ status:'ok' }, sim.getStatus()); },
+      drift_report(){ return sim.driftReport(); },
       confirm_action(a){
         if(!pending) return fail('no_pending', 'No hay ninguna acción pendiente de confirmar.');
         if(now() > pending.expires){ pending = null; return fail('expired', 'La confirmación caducó. Repite la orden.'); }
@@ -209,17 +215,21 @@
       }
     };
 
-    function execute(name, args){
+    /* ctx.origin: 'user' = turno iniciado por el práctico (voz o práctica escrita); 'event' = aviso del sistema.
+       En un turno 'event' solo se admiten herramientas de solo lectura: el asesor recomienda, nunca ejecuta. */
+    function execute(name, args, ctx){
       args = args || {};
       const h = handlers[name];
       if(!h) return fail('unknown_tool', 'Herramienta desconocida: ' + name);
+      if(ctx && ctx.origin === 'event' && !READ_ONLY.includes(name))
+        return fail('advisor_cannot_act', 'Solo el práctico da órdenes. No se ejecutó nada: limítate a informar o recomendar.');
       if(name !== 'confirm_action' && pending) pending = null;   // cualquier otra orden descarta la confirmación pendiente
       try{ return h(args); }
       catch(e){ return fail('exception', String(e && e.message || e)); }
     }
     function getPending(){
       if(pending && now() > pending.expires) pending = null;
-      return pending ? { token: pending.token, summary: pending.summary } : null;
+      return pending ? { token: pending.token, summary: pending.summary, expires: pending.expires, ttl: CONFIRM_TTL_MS } : null;
     }
     function confirmPending(){   // botón "Sí" en pantalla: la pulsación ya es la confirmación del usuario
       const p = getPending(); if(!p) return fail('no_pending', 'Nada pendiente.');
@@ -232,5 +242,5 @@
     return { definitions, execute, getPending, confirmPending, cancelPending, noteUserTurn };
   }
 
-  return { create, definitions, CONFIRM_TTL_MS, POINTS };
+  return { create, definitions, CONFIRM_TTL_MS, POINTS, READ_ONLY };
 });

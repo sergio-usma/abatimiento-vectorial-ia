@@ -98,17 +98,28 @@
       hdgTarget: null,          // grados
       rateDegS: 0,              // velocidad de giro objetivo (°/s, + estribor) en modo 'rate'
       helmLabel: '',
-      telegraph: 'stop',
+      telegraph: 'stop',        // clave del telégrafo, o 'hold' = mantener la potencia que ya había (ver seed)
+      holdF: 0, holdDir: 1,     // potencia (0-1 del máximo) y sentido mantenidos en modo 'hold'
       steady: 0,                // segundos simulados dentro de la ventana de cumplimiento
       reported: true            // ya se informó el rumbo actual
     };
 
     function activate(){ s.active = true; }
+    const entry = () => s.telegraph === 'hold'
+      ? { f: s.holdF, dir: s.holdDir, label: 'Hold power' }
+      : TELEGRAPH[s.telegraph];
 
     return {
       state: s,
       isActive: () => s.active,
-      release(){ s.active = false; s.hdgTarget = null; s.mode = 'heading'; s.rateDegS = 0; s.helmLabel = ''; s.telegraph = 'stop'; s.steady = 0; s.reported = true; },
+      release(){ s.active = false; s.hdgTarget = null; s.mode = 'heading'; s.rateDegS = 0; s.helmLabel = ''; s.telegraph = 'stop'; s.holdF = 0; s.holdDir = 1; s.steady = 0; s.reported = true; },
+
+      /* Al pasar de mando manual a una orden de rumbo o timón, la potencia NO cambia: se mantiene tal cual estaba
+         hasta que el práctico dé una orden de máquinas. (No inventa ninguna orden de máquinas.) */
+      seed(fraction, dir){
+        if(s.active) return;
+        s.telegraph = 'hold'; s.holdF = clamp(Math.abs(fraction || 0), 0, 1); s.holdDir = dir >= 0 ? 1 : -1;
+      },
 
       /* "Steer course 090" / "Navega con rumbo 090" / "Steady on 090" */
       steerCourse(deg){
@@ -144,14 +155,14 @@
         activate(); s.telegraph = order;
         return TELEGRAPH[order];
       },
-      telegraphEntry: () => TELEGRAPH[s.telegraph],
+      telegraphEntry: entry,
 
       describe(){
         if(!s.active) return '';
         const parts = [];
         if(s.mode === 'heading' && s.hdgTarget != null) parts.push(pad3(s.hdgTarget) + '°');
         else if(s.mode === 'rate' && s.helmLabel) parts.push(s.helmLabel);
-        parts.push(TELEGRAPH[s.telegraph].label);
+        parts.push(entry().label);
         return parts.join(' · ');
       },
 
@@ -166,7 +177,7 @@
         } else if(s.mode === 'rate'){
           Nd = rateLaw(ship, s.rateDegS * D2R, r);
         }
-        const t = TELEGRAPH[s.telegraph];
+        const t = entry();
         const T0 = t.f * ship.thrustMax * 0.5;
         const phi = t.dir > 0 ? 0 : 180;
 
@@ -197,6 +208,14 @@
     return best || 'stop';
   }
 
+  /* Rumbo leído dígito a dígito, como en el puente: 030 = "cero tres cero" / "zero three zero". */
+  const DIGITS_ES = ['cero','uno','dos','tres','cuatro','cinco','seis','siete','ocho','nueve'];
+  const DIGITS_EN = ['zero','one','two','three','four','five','six','seven','eight','nine'];
+  function spokenHeading(deg){
+    const d = pad3(deg).split('').map(Number);
+    return { digits: pad3(deg), es: d.map(i => DIGITS_ES[i]).join(' '), en: d.map(i => DIGITS_EN[i]).join(' ') };
+  }
+
   /* ---------- Rosa de 16 rumbos (es + en) -> grados ---------- */
   const POINTS = {
     N:0, NNE:22.5, NE:45, ENE:67.5, E:90, ESE:112.5, SE:135, SSE:157.5,
@@ -209,5 +228,5 @@
     return Object.prototype.hasOwnProperty.call(POINTS, k) ? POINTS[k] : null;
   }
 
-  return { TELEGRAPH, CFG, fromThrust, allocate, headingLaw, rateLaw, gains, create, POINTS, POINT_LIST, pointToDeg, norm360, angDiff, pad3 };
+  return { TELEGRAPH, CFG, fromThrust, spokenHeading, allocate, headingLaw, rateLaw, gains, create, POINTS, POINT_LIST, pointToDeg, norm360, angDiff, pad3 };
 });

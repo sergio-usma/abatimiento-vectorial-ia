@@ -1,0 +1,2134 @@
+{
+ "version": 1,
+ "catLabels": {
+  "Rumbo": {
+   "en": "Course"
+  },
+  "Timón": {
+   "en": "Helm"
+  },
+  "Máquinas": {
+   "en": "Engines"
+  },
+  "Mando": {
+   "en": "Control"
+  },
+  "Viento": {
+   "en": "Wind"
+  },
+  "Corriente": {
+   "en": "Current"
+  },
+  "Mar": {
+   "en": "Sea"
+  },
+  "Simulación": {
+   "en": "Simulation"
+  },
+  "Derrota": {
+   "en": "Route"
+  },
+  "Vista": {
+   "en": "View"
+  },
+  "Consultas": {
+   "en": "Reports"
+  },
+  "Confirmación": {
+   "en": "Confirm"
+  }
+ },
+ "description": "Órdenes de puente (IMO SMCP y órdenes normalizadas de timón y máquinas) en español e inglés. Fuente única: js/grammar.js la compila al cargar y js/voice.js ejecuta SOLO lo que coincide. Los patrones son expresiones regulares sobre texto normalizado (minúsculas, sin acentos ni puntuación, números hablados a cifras); {slot} captura un valor; %MACRO% se expande.",
+ "wake": [
+  "marina"
+ ],
+ "fillers": [
+  "por favor",
+  "please",
+  "capitan",
+  "captain",
+  "practico",
+  "pilot",
+  "senor",
+  "sir",
+  "aye",
+  "eh",
+  "ok",
+  "okay",
+  "oiga",
+  "oye",
+  "listo",
+  "ahora",
+  "now",
+  "bien",
+  "vale"
+ ],
+ "macros": {
+  "%DIRFROM_ES%": "(por|del|de|desde)( el)? {dir}",
+  "%DIRFROM_EN%": "from( the)? {dir}",
+  "%DIRTO_ES%": "(hacia|rumbo a)( el)? {dir}",
+  "%DIRTO_EN%": "(setting|toward|towards|to)( the)? {dir}",
+  "%KN_ES%": "{kn}( nudos?)?",
+  "%KN_EN%": "{kn}( knots?| kts?)?",
+  "%VUP_ES%": "(aumenta|aumente|incrementa|incremente|sube|suba|refuerza|refuerce)",
+  "%VDN_ES%": "(reduce|reduzca|baja|baje|disminuye|disminuya|afloja|modera)",
+  "%VUP_EN%": "(increase|raise|strengthen|add)",
+  "%VDN_EN%": "(decrease|reduce|lower|ease|drop)"
+ },
+ "slots": {
+  "heading": "Rumbo: tres dígitos hablados dígito a dígito (000-359). Las cifras dichas como número (\"noventa\") se rechazan: \"rumbo por dígitos\".",
+  "deg": "Grados de caída (1-180). Admite cifras o número hablado.",
+  "angle": "Ángulo de timón (1-35).",
+  "kn": "Nudos o metros, con decimales (\"cero punto cinco\").",
+  "speed": "Velocidad de simulación: 1, 5, 15 o 40.",
+  "dir": "Dirección: cifras (0-359) o punto cardinal (norte, noreste, este, … north, east …).",
+  "side": "Banda: babor/port, estribor/starboard."
+ },
+ "points": {
+  "norte": 0,
+  "north": 0,
+  "n": 0,
+  "nornoreste": 22.5,
+  "nne": 22.5,
+  "noreste": 45,
+  "northeast": 45,
+  "ne": 45,
+  "esnoreste": 67.5,
+  "ene": 67.5,
+  "este": 90,
+  "east": 90,
+  "e": 90,
+  "esureste": 112.5,
+  "ese": 112.5,
+  "sureste": 135,
+  "southeast": 135,
+  "se": 135,
+  "sursureste": 157.5,
+  "sse": 157.5,
+  "sur": 180,
+  "south": 180,
+  "s": 180,
+  "sursuroeste": 202.5,
+  "ssw": 202.5,
+  "suroeste": 225,
+  "southwest": 225,
+  "sw": 225,
+  "oesuroeste": 247.5,
+  "wsw": 247.5,
+  "oeste": 270,
+  "west": 270,
+  "w": 270,
+  "oesnoroeste": 292.5,
+  "wnw": 292.5,
+  "noroeste": 315,
+  "northwest": 315,
+  "nw": 315,
+  "nornoroeste": 337.5,
+  "nnw": 337.5
+ },
+ "sides": {
+  "babor": "port",
+  "port": "port",
+  "estribor": "starboard",
+  "starboard": "starboard"
+ },
+ "labels": {
+  "side": {
+   "es": {
+    "port": "babor",
+    "starboard": "estribor"
+   },
+   "en": {
+    "port": "port",
+    "starboard": "starboard"
+   }
+  },
+  "point": {
+   "es": {
+    "0": "norte",
+    "22.5": "nornoreste",
+    "45": "noreste",
+    "67.5": "esnoreste",
+    "90": "este",
+    "112.5": "esureste",
+    "135": "sureste",
+    "157.5": "sursureste",
+    "180": "sur",
+    "202.5": "sursuroeste",
+    "225": "suroeste",
+    "247.5": "oesuroeste",
+    "270": "oeste",
+    "292.5": "oesnoroeste",
+    "315": "noroeste",
+    "337.5": "nornoroeste"
+   },
+   "en": {
+    "0": "north",
+    "22.5": "north northeast",
+    "45": "northeast",
+    "67.5": "east northeast",
+    "90": "east",
+    "112.5": "east southeast",
+    "135": "southeast",
+    "157.5": "south southeast",
+    "180": "south",
+    "202.5": "south southwest",
+    "225": "southwest",
+    "247.5": "west southwest",
+    "270": "west",
+    "292.5": "west northwest",
+    "315": "northwest",
+    "337.5": "north northwest"
+   }
+  },
+  "engine": {
+   "es": {
+    "Full ahead": "Full avante",
+    "Half ahead": "Media avante",
+    "Slow ahead": "Poca avante",
+    "Dead slow ahead": "Muy poca avante",
+    "Stop engines": "Máquinas paradas",
+    "Dead slow astern": "Muy poca atrás",
+    "Slow astern": "Poca atrás",
+    "Half astern": "Media atrás",
+    "Full astern": "Full atrás",
+    "Hold power": "Potencia mantenida"
+   }
+  }
+ },
+ "messages": {
+  "bad_args": {
+   "es": "Faltan datos. Repita la orden.",
+   "en": "Missing data. Say again."
+  },
+  "no_match": {
+   "es": "Repita.",
+   "en": "Say again."
+  },
+  "digits_required": {
+   "es": "Rumbo por dígitos.",
+   "en": "Course in digits."
+  },
+  "autopilot_active": {
+   "es": "Piloto automático activo. Ordene control manual.",
+   "en": "Autopilot active. Order manual control."
+  },
+  "free_drift": {
+   "es": "Deriva libre. Active el modo manual.",
+   "en": "Free drift. Enable manual mode."
+  },
+  "engines_stopped": {
+   "es": "Máquinas paradas.",
+   "en": "Engines stopped."
+  },
+  "sim_paused": {
+   "es": "Simulación en pausa.",
+   "en": "Simulation paused."
+  },
+  "no_route": {
+   "es": "No hay derrota.",
+   "en": "No route."
+  },
+  "outside_chart": {
+   "es": "Fuera de la carta.",
+   "en": "Outside the chart."
+  },
+  "no_data": {
+   "es": "Aún no hay datos.",
+   "en": "No data yet."
+  },
+  "no_pending": {
+   "es": "Nada pendiente.",
+   "en": "Nothing pending."
+  },
+  "expired": {
+   "es": "La confirmación caducó.",
+   "en": "Confirmation expired."
+  },
+  "confirm_sim_reset": {
+   "es": "Reiniciar la simulación. ¿Confirma?",
+   "en": "Reset simulation. Confirm?"
+  },
+  "confirm_route_clear": {
+   "es": "Borrar la derrota. ¿Confirma?",
+   "en": "Clear the route. Confirm?"
+  },
+  "confirm_place_vessel": {
+   "es": "Ubicar el buque. ¿Confirma?",
+   "en": "Place the vessel. Confirm?"
+  },
+  "done": {
+   "es": "Hecho.",
+   "en": "Done."
+  },
+  "error": {
+   "es": "No se pudo.",
+   "en": "Unable."
+  },
+  "unavailable": {
+   "es": "Voz no disponible.",
+   "en": "Voice unavailable."
+  }
+ },
+ "commands": [
+  {
+   "id": "steer_course",
+   "cat": "Rumbo",
+   "kind": "order",
+   "tool": "steer_course",
+   "args": {
+    "degrees": "{heading}"
+   },
+   "es": [
+    "((navega|navegue|gobierna|gobierne|pon|ponga|coloca|coloque|vaya|ve) )?((con|a|al) )?rumbo {heading}",
+    "asi rumbo {heading}",
+    "asi al {heading}"
+   ],
+   "en": [
+    "((steer|steady on|steady|come to|make|set) )(course )?{heading}",
+    "course {heading}"
+   ],
+   "say": {
+    "es": "Rumbo {heading:spoken}.",
+    "en": "Steer course {heading:spoken}."
+   },
+   "examples": {
+    "es": [
+     "Navega con rumbo cero nueve cero",
+     "Así, rumbo tres cero cero",
+     "Rumbo 000"
+    ],
+    "en": [
+     "Steer course zero nine zero",
+     "Steady on two seven zero",
+     "Course three zero five"
+    ]
+   }
+  },
+  {
+   "id": "alter_course",
+   "cat": "Rumbo",
+   "kind": "order",
+   "tool": "alter_course",
+   "args": {
+    "side": "{side}",
+    "degrees": "{deg}"
+   },
+   "es": [
+    "(cae|caiga|cayendo|guiñe|guine) (usted )?{deg}( grados?)? (a|por|hacia)( la)? {side}"
+   ],
+   "en": [
+    "(alter|alter course|come|fall|turn)( course)? {deg}( degrees?)? to( the)? {side}"
+   ],
+   "say": {
+    "es": "Cae {deg} a {side:side}, rumbo {r.ordered_heading_spoken}.",
+    "en": "Alter {deg} to {side:side}, course {r.ordered_heading_spoken}."
+   },
+   "examples": {
+    "es": [
+     "Cae 5 grados a babor",
+     "Caiga diez a estribor"
+    ],
+    "en": [
+     "Alter course 5 degrees to port",
+     "Come ten degrees to starboard"
+    ]
+   }
+  },
+  {
+   "id": "helm_angle",
+   "cat": "Timón",
+   "kind": "order",
+   "tool": "helm_order",
+   "args": {
+    "order": "{side}",
+    "angle": "{angle}"
+   },
+   "es": [
+    "{angle}( grados?)?( de timon)? (a|al|por)( la)? {side}",
+    "timon( a)?( la)? {side} {angle}( grados?)?"
+   ],
+   "en": [
+    "{side} {angle}( degrees?)?",
+    "{angle}( degrees?)? (to )?{side}",
+    "(helm|rudder) {side} {angle}"
+   ],
+   "say": {
+    "es": "{side:side} {angle}.",
+    "en": "{side:side} {angle}."
+   },
+   "examples": {
+    "es": [
+     "Diez a babor",
+     "Veinte a estribor",
+     "Timón a estribor 15"
+    ],
+    "en": [
+     "Port ten",
+     "Starboard twenty five",
+     "Port 5"
+    ]
+   }
+  },
+  {
+   "id": "helm_hard",
+   "cat": "Timón",
+   "kind": "order",
+   "tool": "helm_order",
+   "args": {
+    "order": "hard_{side}"
+   },
+   "es": [
+    "(timon )?(todo|toda)( el timon)?( a| al| por)?( la)? {side}",
+    "timon a fondo( a)?( la)? {side}"
+   ],
+   "en": [
+    "(hard|full)( to| a)?( the)? {side}",
+    "hard a {side}"
+   ],
+   "say": {
+    "es": "Todo a {side:side}.",
+    "en": "Hard to {side:side}."
+   },
+   "examples": {
+    "es": [
+     "Todo a babor",
+     "Toda a estribor"
+    ],
+    "en": [
+     "Hard to starboard",
+     "Hard a port"
+    ]
+   }
+  },
+  {
+   "id": "helm_midships",
+   "cat": "Timón",
+   "kind": "order",
+   "tool": "helm_order",
+   "args": {
+    "order": "midships"
+   },
+   "es": [
+    "(timon )?(a la via|al centro|en el centro|a cero|a la vida)",
+    "(timon )?derecho"
+   ],
+   "en": [
+    "(helm |rudder )?(amidships|midships)"
+   ],
+   "say": {
+    "es": "Timón a la vía.",
+    "en": "Midships."
+   },
+   "examples": {
+    "es": [
+     "Timón a la vía",
+     "A la vía"
+    ],
+    "en": [
+     "Midships",
+     "Rudder amidships"
+    ]
+   }
+  },
+  {
+   "id": "helm_steady",
+   "cat": "Timón",
+   "kind": "order",
+   "tool": "helm_order",
+   "args": {
+    "order": "steady"
+   },
+   "es": [
+    "asi",
+    "asi se queda",
+    "asi derecho",
+    "(mantenga|manten|mantener) asi",
+    "asi mantenga"
+   ],
+   "en": [
+    "steady",
+    "steady as she goes",
+    "(keep|hold)( her)? steady"
+   ],
+   "say": {
+    "es": "Así.",
+    "en": "Steady."
+   },
+   "examples": {
+    "es": [
+     "Así",
+     "Mantenga así"
+    ],
+    "en": [
+     "Steady",
+     "Steady as she goes"
+    ]
+   }
+  },
+  {
+   "id": "engine_full_ahead",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "full_ahead"
+   },
+   "es": [
+    "(full|toda|a toda|maxima|maximo)( la)?( fuerza| maquina)? avante",
+    "avante (toda|full|a toda fuerza|a toda maquina)",
+    "avante a toda"
+   ],
+   "en": [
+    "full ahead",
+    "ahead full",
+    "all ahead full"
+   ],
+   "say": {
+    "es": "Full avante.",
+    "en": "Full ahead."
+   },
+   "examples": {
+    "es": [
+     "Full avante",
+     "Avante toda"
+    ],
+    "en": [
+     "Full ahead",
+     "Ahead full"
+    ]
+   }
+  },
+  {
+   "id": "engine_half_ahead",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "half_ahead"
+   },
+   "es": [
+    "media( maquina)? avante",
+    "avante media"
+   ],
+   "en": [
+    "half ahead",
+    "ahead half"
+   ],
+   "say": {
+    "es": "Media avante.",
+    "en": "Half ahead."
+   },
+   "examples": {
+    "es": [
+     "Media avante"
+    ],
+    "en": [
+     "Half ahead"
+    ]
+   }
+  },
+  {
+   "id": "engine_slow_ahead",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "slow_ahead"
+   },
+   "es": [
+    "poca( maquina)? avante",
+    "avante poca",
+    "avante despacio",
+    "despacio avante"
+   ],
+   "en": [
+    "slow ahead",
+    "ahead slow"
+   ],
+   "say": {
+    "es": "Poca avante.",
+    "en": "Slow ahead."
+   },
+   "examples": {
+    "es": [
+     "Poca avante"
+    ],
+    "en": [
+     "Slow ahead"
+    ]
+   }
+  },
+  {
+   "id": "engine_dead_slow_ahead",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "dead_slow_ahead"
+   },
+   "es": [
+    "muy poca( maquina)? avante",
+    "avante muy poca",
+    "avante muy despacio"
+   ],
+   "en": [
+    "dead slow ahead",
+    "ahead dead slow"
+   ],
+   "say": {
+    "es": "Muy poca avante.",
+    "en": "Dead slow ahead."
+   },
+   "examples": {
+    "es": [
+     "Muy poca avante"
+    ],
+    "en": [
+     "Dead slow ahead"
+    ]
+   }
+  },
+  {
+   "id": "engine_stop",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "stop"
+   },
+   "es": [
+    "(para|paren|pare|stop|detenga|detener|detengan) (las )?(maquinas?|motores)",
+    "(maquinas?|motores) (a )?(stop|paradas?|pare)",
+    "stop maquinas?"
+   ],
+   "en": [
+    "stop( the)? engines?",
+    "engines? stop",
+    "all engines stop",
+    "stop"
+   ],
+   "say": {
+    "es": "Máquinas paradas.",
+    "en": "Engines stopped."
+   },
+   "examples": {
+    "es": [
+     "Para máquinas",
+     "Stop máquinas"
+    ],
+    "en": [
+     "Stop engines",
+     "Engines stop"
+    ]
+   }
+  },
+  {
+   "id": "engine_dead_slow_astern",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "dead_slow_astern"
+   },
+   "es": [
+    "muy poca( maquina)? (atras|a popa)",
+    "atras muy poca"
+   ],
+   "en": [
+    "dead slow astern",
+    "astern dead slow"
+   ],
+   "say": {
+    "es": "Muy poca atrás.",
+    "en": "Dead slow astern."
+   },
+   "examples": {
+    "es": [
+     "Muy poca atrás"
+    ],
+    "en": [
+     "Dead slow astern"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "engine_slow_astern",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "slow_astern"
+   },
+   "es": [
+    "poca( maquina)? (atras|a popa)",
+    "atras poca",
+    "atras despacio"
+   ],
+   "en": [
+    "slow astern",
+    "astern slow"
+   ],
+   "say": {
+    "es": "Poca atrás.",
+    "en": "Slow astern."
+   },
+   "examples": {
+    "es": [
+     "Poca atrás"
+    ],
+    "en": [
+     "Slow astern"
+    ]
+   }
+  },
+  {
+   "id": "engine_half_astern",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "half_astern"
+   },
+   "es": [
+    "media( maquina)? (atras|a popa)",
+    "atras media"
+   ],
+   "en": [
+    "half astern",
+    "astern half"
+   ],
+   "say": {
+    "es": "Media atrás.",
+    "en": "Half astern."
+   },
+   "examples": {
+    "es": [
+     "Media atrás"
+    ],
+    "en": [
+     "Half astern"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "engine_full_astern",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "engine_order",
+   "args": {
+    "order": "full_astern"
+   },
+   "es": [
+    "(full|toda|a toda|maxima|maximo)( la)?( fuerza| maquina)? (atras|a popa)",
+    "atras (toda|full|a toda fuerza)"
+   ],
+   "en": [
+    "full astern",
+    "astern full",
+    "all astern full"
+   ],
+   "say": {
+    "es": "Full atrás.",
+    "en": "Full astern."
+   },
+   "examples": {
+    "es": [
+     "Full atrás",
+     "Atrás toda"
+    ],
+    "en": [
+     "Full astern"
+    ]
+   }
+  },
+  {
+   "id": "all_stop",
+   "cat": "Máquinas",
+   "kind": "order",
+   "tool": "all_stop",
+   "es": [
+    "alto general",
+    "paren todo",
+    "alto total"
+   ],
+   "en": [
+    "all stop",
+    "stop all",
+    "emergency stop"
+   ],
+   "say": {
+    "es": "Alto general.",
+    "en": "All stop."
+   },
+   "examples": {
+    "es": [
+     "Alto general"
+    ],
+    "en": [
+     "All stop"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "manual_control",
+   "cat": "Mando",
+   "kind": "order",
+   "tool": "manual_control",
+   "es": [
+    "(control manual|timon manual|manual)",
+    "(tomo|toma|tomar|tomen) (el )?(control|mando)",
+    "(cancela|cancelar|cancele) (las )?ordenes"
+   ],
+   "en": [
+    "(manual control|hand steering|manual)",
+    "take (the )?(con|helm|control)",
+    "cancel( all)? orders"
+   ],
+   "say": {
+    "es": "Control manual.",
+    "en": "Manual control."
+   },
+   "examples": {
+    "es": [
+     "Control manual",
+     "Toma el control",
+     "Cancela las órdenes"
+    ],
+    "en": [
+     "Take the con",
+     "Manual control"
+    ]
+   }
+  },
+  {
+   "id": "autopilot_on",
+   "cat": "Mando",
+   "kind": "order",
+   "tool": "set_autopilot",
+   "args": {
+    "on": true
+   },
+   "es": [
+    "(sigue|siga|seguir|sigan) (la )?derrota",
+    "(activa|activar|active|activen|enciende|conecta) (el )?piloto( automatico)?"
+   ],
+   "en": [
+    "follow (the )?(route|track)",
+    "(engage|activate|start|switch on) (the )?(autopilot|auto pilot)"
+   ],
+   "say": {
+    "es": "Piloto automático.",
+    "en": "Autopilot engaged."
+   },
+   "examples": {
+    "es": [
+     "Sigue la derrota",
+     "Activa el piloto automático"
+    ],
+    "en": [
+     "Follow the route",
+     "Engage autopilot"
+    ]
+   }
+  },
+  {
+   "id": "autopilot_off",
+   "cat": "Mando",
+   "kind": "order",
+   "tool": "set_autopilot",
+   "args": {
+    "on": false
+   },
+   "es": [
+    "(desactiva|desactivar|desactive|apaga|apagar|quita|desconecta) (el )?piloto( automatico)?"
+   ],
+   "en": [
+    "(disengage|deactivate|stop|switch off|cancel) (the )?(autopilot|auto pilot)",
+    "autopilot off"
+   ],
+   "say": {
+    "es": "Piloto desactivado.",
+    "en": "Autopilot off."
+   },
+   "examples": {
+    "es": [
+     "Desactiva el piloto"
+    ],
+    "en": [
+     "Disengage autopilot"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "wind_set",
+   "cat": "Viento",
+   "kind": "order",
+   "tool": "set_wind",
+   "args": {
+    "knots": "{kn}",
+    "from_deg": "{dir}"
+   },
+   "es": [
+    "((%VUP_ES%|%VDN_ES%|pon|ponga|fija|fije|cambia|cambie|establece) )?(el )?viento (a|hasta) %KN_ES%( %DIRFROM_ES%)?",
+    "(el )?viento %KN_ES%( %DIRFROM_ES%)?"
+   ],
+   "en": [
+    "((increase|decrease|reduce|raise|lower|set|make|change) )?(the )?wind (to|at) %KN_EN%( %DIRFROM_EN%)?",
+    "(the )?wind %KN_EN%( %DIRFROM_EN%)?"
+   ],
+   "say": {
+    "es": "Viento{kn:kn_es}{dir:from_es}.",
+    "en": "Wind{kn:kn_en}{dir:from_en}."
+   },
+   "examples": {
+    "es": [
+     "Aumenta viento a 40 nudos por el Este",
+     "Viento 25 nudos"
+    ],
+    "en": [
+     "Increase wind to 40 knots from the east",
+     "Wind 25 knots from 045"
+    ]
+   }
+  },
+  {
+   "id": "wind_dir",
+   "cat": "Viento",
+   "kind": "order",
+   "tool": "set_wind",
+   "args": {
+    "knots": "{kn}",
+    "from_deg": "{dir}"
+   },
+   "es": [
+    "(el )?viento %DIRFROM_ES%( %KN_ES%)?"
+   ],
+   "en": [
+    "(the )?wind %DIRFROM_EN%( %KN_EN%)?"
+   ],
+   "say": {
+    "es": "Viento{kn:kn_es}{dir:from_es}.",
+    "en": "Wind{kn:kn_en}{dir:from_en}."
+   },
+   "examples": {
+    "es": [
+     "Viento por el cero cuatro cinco, 25 nudos",
+     "Viento del noreste"
+    ],
+    "en": [
+     "Wind from 045 25 knots",
+     "Wind from the east"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "wind_inc",
+   "cat": "Viento",
+   "kind": "order",
+   "tool": "set_wind",
+   "args": {
+    "delta_knots": "{kn}",
+    "from_deg": "{dir}"
+   },
+   "es": [
+    "%VUP_ES% (el )?viento( en)? %KN_ES%( mas)?( %DIRFROM_ES%)?"
+   ],
+   "en": [
+    "%VUP_EN% (the )?wind( by)? %KN_EN%( more)?( %DIRFROM_EN%)?"
+   ],
+   "say": {
+    "es": "Viento, {kn} nudos más.",
+    "en": "Wind, {kn} knots more."
+   },
+   "examples": {
+    "es": [
+     "Aumenta el viento en 5 nudos"
+    ],
+    "en": [
+     "Increase wind by 5 knots"
+    ]
+   }
+  },
+  {
+   "id": "wind_dec",
+   "cat": "Viento",
+   "kind": "order",
+   "tool": "set_wind",
+   "args": {
+    "delta_knots": {
+     "$": "kn",
+     "mul": -1
+    },
+    "from_deg": "{dir}"
+   },
+   "es": [
+    "%VDN_ES% (el )?viento( en)? %KN_ES%( menos)?( %DIRFROM_ES%)?"
+   ],
+   "en": [
+    "%VDN_EN% (the )?wind( by)? %KN_EN%( less)?( %DIRFROM_EN%)?"
+   ],
+   "say": {
+    "es": "Viento, {kn} nudos menos.",
+    "en": "Wind, {kn} knots less."
+   },
+   "examples": {
+    "es": [
+     "Baja el viento 3 nudos"
+    ],
+    "en": [
+     "Reduce wind by 3 knots"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "wind_calm",
+   "cat": "Viento",
+   "kind": "order",
+   "tool": "set_wind",
+   "args": {
+    "knots": 0
+   },
+   "es": [
+    "(sin viento|viento (en )?calma|(apaga|quita) (el )?viento)"
+   ],
+   "en": [
+    "(no wind|wind calm|calm the wind|wind off)"
+   ],
+   "say": {
+    "es": "Sin viento.",
+    "en": "No wind."
+   },
+   "examples": {
+    "es": [
+     "Sin viento"
+    ],
+    "en": [
+     "No wind"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "current_from",
+   "cat": "Corriente",
+   "kind": "order",
+   "tool": "set_current",
+   "args": {
+    "knots": "{kn}",
+    "from_deg": "{dir}"
+   },
+   "es": [
+    "(la )?corriente %DIRFROM_ES%( %KN_ES%)?",
+    "(la )?corriente (de |a )?%KN_ES% %DIRFROM_ES%"
+   ],
+   "en": [
+    "(the )?current %DIRFROM_EN%( %KN_EN%)?",
+    "(the )?current (of |at )?%KN_EN% %DIRFROM_EN%"
+   ],
+   "say": {
+    "es": "Corriente{kn:kn_es}{dir:from_es}.",
+    "en": "Current{kn:kn_en}{dir:from_en}."
+   },
+   "examples": {
+    "es": [
+     "Corriente por el 003",
+     "Corriente de 1 nudo por el cero cero tres"
+    ],
+    "en": [
+     "Current from 003",
+     "Current 1 knot from the south"
+    ]
+   }
+  },
+  {
+   "id": "current_to",
+   "cat": "Corriente",
+   "kind": "order",
+   "tool": "set_current",
+   "args": {
+    "knots": "{kn}",
+    "toward_deg": "{dir}"
+   },
+   "es": [
+    "(la )?corriente %DIRTO_ES%( %KN_ES%)?",
+    "(la )?corriente (de |a )?%KN_ES% %DIRTO_ES%"
+   ],
+   "en": [
+    "(the )?current %DIRTO_EN%( %KN_EN%)?",
+    "(the )?current (of |at )?%KN_EN% %DIRTO_EN%"
+   ],
+   "say": {
+    "es": "Corriente{kn:kn_es}{dir:to_es}.",
+    "en": "Current{kn:kn_en}{dir:to_en}."
+   },
+   "examples": {
+    "es": [
+     "Corriente hacia el 180",
+     "Corriente de un nudo hacia el uno ocho cero"
+    ],
+    "en": [
+     "Current setting 180",
+     "Current 1 knot toward 180"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "current_abs",
+   "cat": "Corriente",
+   "kind": "order",
+   "tool": "set_current",
+   "args": {
+    "knots": "{kn}"
+   },
+   "es": [
+    "((%VUP_ES%|%VDN_ES%|pon|ponga|fija|fije|cambia|cambie) )?(la )?corriente (a|hasta|de) %KN_ES%"
+   ],
+   "en": [
+    "((increase|decrease|reduce|raise|lower|set|make|change) )?(the )?current (to|at|of) %KN_EN%"
+   ],
+   "say": {
+    "es": "Corriente {kn} nudos.",
+    "en": "Current {kn} knots."
+   },
+   "examples": {
+    "es": [
+     "Corriente a 1 nudo"
+    ],
+    "en": [
+     "Set current to 1 knot"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "current_inc",
+   "cat": "Corriente",
+   "kind": "order",
+   "tool": "set_current",
+   "args": {
+    "delta_knots": "{kn}",
+    "from_deg": "{dir}"
+   },
+   "es": [
+    "%VUP_ES% (la )?corriente( en)? %KN_ES%( mas)?( %DIRFROM_ES%)?",
+    "%VUP_ES% (la )?corriente( en)? %KN_ES%( mas)? %DIRTO_ES%"
+   ],
+   "en": [
+    "%VUP_EN% (the )?current( by)? %KN_EN%( more)?( %DIRFROM_EN%)?",
+    "%VUP_EN% (the )?current( by)? %KN_EN%( more)? %DIRTO_EN%"
+   ],
+   "say": {
+    "es": "Corriente, {kn} nudos más.",
+    "en": "Current, {kn} knots more."
+   },
+   "examples": {
+    "es": [
+     "Incrementa corriente en 0.5 por el 003",
+     "Aumenta la corriente 1 nudo"
+    ],
+    "en": [
+     "Increase current by 1 knot"
+    ]
+   }
+  },
+  {
+   "id": "current_dec",
+   "cat": "Corriente",
+   "kind": "order",
+   "tool": "set_current",
+   "args": {
+    "delta_knots": {
+     "$": "kn",
+     "mul": -1
+    },
+    "from_deg": "{dir}"
+   },
+   "es": [
+    "%VDN_ES% (la )?corriente( en)? %KN_ES%( menos)?( %DIRFROM_ES%)?"
+   ],
+   "en": [
+    "%VDN_EN% (the )?current( by)? %KN_EN%( less)?( %DIRFROM_EN%)?"
+   ],
+   "say": {
+    "es": "Corriente, {kn} nudos menos.",
+    "en": "Current, {kn} knots less."
+   },
+   "examples": {
+    "es": [
+     "Reduce la corriente en 0.5"
+    ],
+    "en": [
+     "Reduce current by 1 knot"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "current_linked",
+   "cat": "Corriente",
+   "kind": "order",
+   "tool": "set_current",
+   "args": {
+    "linked_to_wind": true
+   },
+   "es": [
+    "(la )?corriente (ligada|enlazada|unida|segun) (al|el) viento",
+    "(liga|enlaza) (la )?corriente (al|con el) viento"
+   ],
+   "en": [
+    "(link|tie) (the )?current to (the )?wind",
+    "(the )?current linked to (the )?wind"
+   ],
+   "say": {
+    "es": "Corriente ligada al viento.",
+    "en": "Current linked to wind."
+   },
+   "examples": {
+    "es": [
+     "Corriente ligada al viento"
+    ],
+    "en": [
+     "Link current to wind"
+    ]
+   }
+  },
+  {
+   "id": "current_calm",
+   "cat": "Corriente",
+   "kind": "order",
+   "tool": "set_current",
+   "args": {
+    "knots": 0
+   },
+   "es": [
+    "(sin corriente|corriente (en )?calma|(apaga|quita) (la )?corriente)"
+   ],
+   "en": [
+    "(no current|current calm|current off)"
+   ],
+   "say": {
+    "es": "Sin corriente.",
+    "en": "No current."
+   },
+   "examples": {
+    "es": [
+     "Sin corriente"
+    ],
+    "en": [
+     "No current"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "sea_waves",
+   "cat": "Mar",
+   "kind": "order",
+   "tool": "set_sea",
+   "args": {
+    "hs_m": "{kn}"
+   },
+   "es": [
+    "(mar|olas?|oleaje|estado del mar)( de| a)? {kn}( metros?| m)?"
+   ],
+   "en": [
+    "(sea state|sea|waves?|swell)( of| at)? {kn}( meters?| metres?| m)?"
+   ],
+   "say": {
+    "es": "Mar {kn} metros.",
+    "en": "Sea {kn} meters."
+   },
+   "examples": {
+    "es": [
+     "Mar de un metro",
+     "Olas de 2 metros"
+    ],
+    "en": [
+     "Sea state one meter",
+     "Waves 2 meters"
+    ]
+   }
+  },
+  {
+   "id": "sea_tide",
+   "cat": "Mar",
+   "kind": "order",
+   "tool": "set_sea",
+   "args": {
+    "tide_m": "{kn}"
+   },
+   "es": [
+    "marea( de| a)? {kn}( metros?| m)?"
+   ],
+   "en": [
+    "tide( of| at)? {kn}( meters?| metres?| m)?"
+   ],
+   "say": {
+    "es": "Marea {kn} metros.",
+    "en": "Tide {kn} meters."
+   },
+   "examples": {
+    "es": [
+     "Marea de 0.5 metro"
+    ],
+    "en": [
+     "Tide 1 meter"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "sim_start",
+   "cat": "Simulación",
+   "kind": "order",
+   "tool": "sim_control",
+   "args": {
+    "action": "start"
+   },
+   "es": [
+    "(inicia|iniciar|inicie|arranca|arrancar|empieza|comienza|reanuda)( la)?( simulacion)?"
+   ],
+   "en": [
+    "(start|begin|resume|run)( the)?( simulation| sim)?"
+   ],
+   "say": {
+    "es": "Simulación iniciada.",
+    "en": "Simulation running."
+   },
+   "examples": {
+    "es": [
+     "Inicia la simulación"
+    ],
+    "en": [
+     "Start simulation"
+    ]
+   }
+  },
+  {
+   "id": "sim_pause",
+   "cat": "Simulación",
+   "kind": "order",
+   "tool": "sim_control",
+   "args": {
+    "action": "pause"
+   },
+   "es": [
+    "(pausa|pausar|pause|congela)( la)?( simulacion)?"
+   ],
+   "en": [
+    "(pause|freeze)( the)?( simulation| sim)?"
+   ],
+   "say": {
+    "es": "Simulación en pausa.",
+    "en": "Simulation paused."
+   },
+   "examples": {
+    "es": [
+     "Pausa la simulación"
+    ],
+    "en": [
+     "Pause simulation"
+    ]
+   }
+  },
+  {
+   "id": "sim_reset",
+   "cat": "Simulación",
+   "kind": "order",
+   "tool": "sim_control",
+   "args": {
+    "action": "reset"
+   },
+   "es": [
+    "(reinicia|reiniciar|reinicie|resetea|reset)( la)?( simulacion| todo)?"
+   ],
+   "en": [
+    "(reset|restart)( the)?( simulation| sim| everything)?"
+   ],
+   "say": {
+    "es": "Reiniciar la simulación. ¿Confirma?",
+    "en": "Reset simulation. Confirm?"
+   },
+   "examples": {
+    "es": [
+     "Reinicia la simulación"
+    ],
+    "en": [
+     "Reset simulation"
+    ]
+   },
+   "confirm": true
+  },
+  {
+   "id": "sim_speed",
+   "cat": "Simulación",
+   "kind": "order",
+   "tool": "set_sim_speed",
+   "args": {
+    "speed": "{speed}"
+   },
+   "es": [
+    "(velocidad|simulacion|tiempo)( de la simulacion)?( a| x)? {speed}( x| veces)?",
+    "{speed}( x| veces)"
+   ],
+   "en": [
+    "(sim |simulation |time )?speed( to| x)? {speed}( x| times)?",
+    "{speed} (x|times)"
+   ],
+   "say": {
+    "es": "Simulación a {speed} equis.",
+    "en": "Simulation at {speed} times."
+   },
+   "examples": {
+    "es": [
+     "Velocidad 15",
+     "Simulación a 5 veces"
+    ],
+    "en": [
+     "Speed 15",
+     "Simulation speed 40"
+    ]
+   }
+  },
+  {
+   "id": "route_clear",
+   "cat": "Derrota",
+   "kind": "order",
+   "tool": "route",
+   "args": {
+    "action": "clear"
+   },
+   "es": [
+    "(borra|borrar|borre|elimina|eliminar|limpia) (la )?derrota"
+   ],
+   "en": [
+    "(clear|delete|erase) (the )?(route|track)"
+   ],
+   "say": {
+    "es": "Borrar la derrota. ¿Confirma?",
+    "en": "Clear route. Confirm?"
+   },
+   "examples": {
+    "es": [
+     "Borra la derrota"
+    ],
+    "en": [
+     "Clear the route"
+    ]
+   },
+   "confirm": true
+  },
+  {
+   "id": "route_draw",
+   "cat": "Derrota",
+   "kind": "order",
+   "tool": "route",
+   "args": {
+    "action": "start_drawing"
+   },
+   "es": [
+    "(traza|trazar|trace|dibuja|dibujar) (la )?derrota",
+    "empieza a trazar"
+   ],
+   "en": [
+    "(draw|plot|start drawing)( the)?( route| track)?"
+   ],
+   "say": {
+    "es": "Trace los puntos en la carta.",
+    "en": "Plot the points on the chart."
+   },
+   "examples": {
+    "es": [
+     "Traza la derrota"
+    ],
+    "en": [
+     "Draw route"
+    ]
+   }
+  },
+  {
+   "id": "route_stop",
+   "cat": "Derrota",
+   "kind": "order",
+   "tool": "route",
+   "args": {
+    "action": "stop_drawing"
+   },
+   "es": [
+    "(termina|terminar|termine|fin|deja|dejar|deje)( de| del)? (la )?(trazar|trazado|traza|derrota)"
+   ],
+   "en": [
+    "(stop|finish|end) (drawing|plotting)"
+   ],
+   "say": {
+    "es": "Trazado terminado.",
+    "en": "Drawing done."
+   },
+   "examples": {
+    "es": [
+     "Termina de trazar"
+    ],
+    "en": [
+     "Stop drawing"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "ui_left_show",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "panel": "left",
+    "visible": true
+   },
+   "es": [
+    "(muestra|mostrar|muestre|abre|abrir|abra|activa|activar|enciende) (el )?panel (izquierdo|de configuracion|del buque)"
+   ],
+   "en": [
+    "(show|open|display|enable) (the )?(left|configuration|ship) panel"
+   ],
+   "say": {
+    "es": "Panel izquierdo.",
+    "en": "Left panel."
+   },
+   "examples": {
+    "es": [
+     "Muestra el panel izquierdo"
+    ],
+    "en": [
+     "Show left panel"
+    ]
+   }
+  },
+  {
+   "id": "ui_left_hide",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "panel": "left",
+    "visible": false
+   },
+   "es": [
+    "(oculta|ocultar|oculte|cierra|cerrar|cierre|quita|desactiva|apaga) (el )?panel (izquierdo|de configuracion|del buque)"
+   ],
+   "en": [
+    "(hide|close|disable|remove) (the )?(left|configuration|ship) panel"
+   ],
+   "say": {
+    "es": "Panel izquierdo oculto.",
+    "en": "Left panel hidden."
+   },
+   "examples": {
+    "es": [
+     "Oculta el panel izquierdo"
+    ],
+    "en": [
+     "Hide left panel"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "ui_right_show",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "panel": "right",
+    "visible": true
+   },
+   "es": [
+    "(muestra|mostrar|muestre|abre|abrir|abra|activa|activar|enciende) (el )?panel (derecho|de navegacion|de telemetria)"
+   ],
+   "en": [
+    "(show|open|display|enable) (the )?(right|navigation|telemetry) panel"
+   ],
+   "say": {
+    "es": "Panel derecho.",
+    "en": "Right panel."
+   },
+   "examples": {
+    "es": [
+     "Muestra el panel derecho"
+    ],
+    "en": [
+     "Show right panel"
+    ]
+   }
+  },
+  {
+   "id": "ui_right_hide",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "panel": "right",
+    "visible": false
+   },
+   "es": [
+    "(oculta|ocultar|oculte|cierra|cerrar|cierre|quita|desactiva|apaga) (el )?panel (derecho|de navegacion|de telemetria)"
+   ],
+   "en": [
+    "(hide|close|disable|remove) (the )?(right|navigation|telemetry) panel"
+   ],
+   "say": {
+    "es": "Panel derecho oculto.",
+    "en": "Right panel hidden."
+   },
+   "examples": {
+    "es": [
+     "Oculta el panel derecho"
+    ],
+    "en": [
+     "Hide right panel"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "ui_chart_abat",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "chart": "abat"
+   },
+   "es": [
+    "(grafica|grafico|muestra la grafica) (de )?(abatimiento|deriva)"
+   ],
+   "en": [
+    "(abeam|leeway|drift) (chart|graph)",
+    "(show )?(the )?(leeway|drift) (chart|graph)"
+   ],
+   "say": {
+    "es": "Gráfica de abatimiento.",
+    "en": "Leeway chart."
+   },
+   "examples": {
+    "es": [
+     "Gráfica de abatimiento"
+    ],
+    "en": [
+     "Show leeway chart"
+    ]
+   }
+  },
+  {
+   "id": "ui_chart_batim",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "chart": "batim"
+   },
+   "es": [
+    "(grafica|grafico|perfil)( de)? (batimetria|batimetrico|profundidad)"
+   ],
+   "en": [
+    "(bathymetry|depth)( chart| graph| profile)",
+    "(show )?(the )?depth profile"
+   ],
+   "say": {
+    "es": "Perfil batimétrico.",
+    "en": "Depth profile."
+   },
+   "examples": {
+    "es": [
+     "Perfil batimétrico"
+    ],
+    "en": [
+     "Depth profile"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "ui_radar_open",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "rose": "open"
+   },
+   "es": [
+    "(abre|abrir|abra|amplia|ampliar|expande|expandir) (el )?(radar|rosa)"
+   ],
+   "en": [
+    "(open|expand|enlarge) (the )?(radar|rose)"
+   ],
+   "say": {
+    "es": "Radar ampliado.",
+    "en": "Radar expanded."
+   },
+   "examples": {
+    "es": [
+     "Amplía el radar"
+    ],
+    "en": [
+     "Expand radar"
+    ]
+   }
+  },
+  {
+   "id": "ui_radar_close",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "rose": "close"
+   },
+   "es": [
+    "(cierra|cerrar|cierre|minimiza|reduce) (el )?(radar|rosa)"
+   ],
+   "en": [
+    "(close|minimize|shrink) (the )?(radar|rose)"
+   ],
+   "say": {
+    "es": "Radar reducido.",
+    "en": "Radar minimized."
+   },
+   "examples": {
+    "es": [
+     "Minimiza el radar"
+    ],
+    "en": [
+     "Close radar"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "ui_follow_on",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "follow": true
+   },
+   "es": [
+    "(centra|centrar|centre|centrar en) (el )?buque",
+    "(sigue|seguir|siga) (al|el) buque"
+   ],
+   "en": [
+    "(center|centre)( on)?( the)? (ship|vessel)",
+    "follow( the)? (ship|vessel)"
+   ],
+   "say": {
+    "es": "Carta centrada.",
+    "en": "Chart centered."
+   },
+   "examples": {
+    "es": [
+     "Centra el buque"
+    ],
+    "en": [
+     "Center on ship"
+    ]
+   }
+  },
+  {
+   "id": "ui_follow_off",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "follow": false
+   },
+   "es": [
+    "(deja|dejar|deje) de seguir( al| el)?( buque)?",
+    "libera la carta"
+   ],
+   "en": [
+    "(stop following|unfollow)( the)?( ship| vessel)?",
+    "free the chart"
+   ],
+   "say": {
+    "es": "Carta libre.",
+    "en": "Chart free."
+   },
+   "examples": {
+    "es": [
+     "Deja de seguir el buque"
+    ],
+    "en": [
+     "Stop following"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "ui_overview_show",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "overview": true
+   },
+   "es": [
+    "(muestra|mostrar|muestre|abre|abrir|abra|activa|activar|enciende) (la )?vista general"
+   ],
+   "en": [
+    "(show|open|display|enable) (the )?overview"
+   ],
+   "say": {
+    "es": "Vista general.",
+    "en": "Overview."
+   },
+   "examples": {
+    "es": [
+     "Muestra la vista general"
+    ],
+    "en": [
+     "Show overview"
+    ]
+   }
+  },
+  {
+   "id": "ui_overview_hide",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "overview": false
+   },
+   "es": [
+    "(oculta|ocultar|oculte|cierra|cerrar|cierre|quita|desactiva|apaga) (la )?vista general"
+   ],
+   "en": [
+    "(hide|close|disable|remove) (the )?overview"
+   ],
+   "say": {
+    "es": "Vista general oculta.",
+    "en": "Overview hidden."
+   },
+   "examples": {
+    "es": [
+     "Oculta la vista general"
+    ],
+    "en": [
+     "Hide overview"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "ui_forces_show",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "forces": true
+   },
+   "es": [
+    "(muestra|mostrar|muestre|abre|abrir|abra|activa|activar|enciende) (el )?diagrama( de)?( las)?( fuerzas)?",
+    "(muestra|mostrar|muestre|abre|abrir|abra|activa|activar|enciende) (las )?fuerzas"
+   ],
+   "en": [
+    "(show|open|display|enable) (the )?(force|forces)( diagram)?"
+   ],
+   "say": {
+    "es": "Diagrama de fuerzas.",
+    "en": "Force diagram."
+   },
+   "examples": {
+    "es": [
+     "Muestra el diagrama de fuerzas"
+    ],
+    "en": [
+     "Show force diagram"
+    ]
+   }
+  },
+  {
+   "id": "ui_forces_hide",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "forces": false
+   },
+   "es": [
+    "(oculta|ocultar|oculte|cierra|cerrar|cierre|quita|desactiva|apaga) (el )?diagrama( de)?( las)?( fuerzas)?",
+    "(oculta|ocultar|oculte|cierra|cerrar|cierre|quita|desactiva|apaga) (las )?fuerzas"
+   ],
+   "en": [
+    "(hide|close|disable|remove) (the )?(force|forces)( diagram)?"
+   ],
+   "say": {
+    "es": "Diagrama oculto.",
+    "en": "Force diagram hidden."
+   },
+   "examples": {
+    "es": [
+     "Oculta el diagrama de fuerzas"
+    ],
+    "en": [
+     "Hide force diagram"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "ui_vectors_show",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "vectors": true
+   },
+   "es": [
+    "(muestra|mostrar|muestre|abre|abrir|abra|activa|activar|enciende) (la )?lista( de)?( los)?( vectores)?",
+    "(muestra|mostrar|muestre|abre|abrir|abra|activa|activar|enciende) (los )?vectores"
+   ],
+   "en": [
+    "(show|open|display|enable) (the )?vector( list)?"
+   ],
+   "say": {
+    "es": "Lista de vectores.",
+    "en": "Vector list."
+   },
+   "examples": {
+    "es": [
+     "Muestra la lista de vectores"
+    ],
+    "en": [
+     "Show vector list"
+    ]
+   }
+  },
+  {
+   "id": "ui_vectors_hide",
+   "cat": "Vista",
+   "kind": "ui",
+   "tool": "ui",
+   "args": {
+    "vectors": false
+   },
+   "es": [
+    "(oculta|ocultar|oculte|cierra|cerrar|cierre|quita|desactiva|apaga) (la )?lista( de)?( los)?( vectores)?",
+    "(oculta|ocultar|oculte|cierra|cerrar|cierre|quita|desactiva|apaga) (los )?vectores"
+   ],
+   "en": [
+    "(hide|close|disable|remove) (the )?vector( list)?"
+   ],
+   "say": {
+    "es": "Lista oculta.",
+    "en": "Vector list hidden."
+   },
+   "examples": {
+    "es": [
+     "Oculta la lista de vectores"
+    ],
+    "en": [
+     "Hide vector list"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "q_status",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "get_status",
+   "es": [
+    "((informa|informe|dame|da|reporta|reporte|cual es|dime) (el |la )?)?(estado|situacion)( actual| del buque)?",
+    "(informa|informe|reporta|reporte) estado"
+   ],
+   "en": [
+    "((give me|report|what is|what s|say) (the )?)?(status|situation)( report)?",
+    "status report"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Informa el estado",
+     "Estado"
+    ],
+    "en": [
+     "Report status",
+     "Status report"
+    ]
+   }
+  },
+  {
+   "id": "q_heading",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "get_status",
+   "es": [
+    "((cual es|dime|informa|reporta) (el )?)rumbo( actual)?",
+    "que rumbo (llevamos|llevo|tenemos|tengo)"
+   ],
+   "en": [
+    "(what is|report|say) (the |our )?(heading|course)( now)?",
+    "(heading|course) report"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "¿Cuál es el rumbo?",
+     "Qué rumbo llevamos"
+    ],
+    "en": [
+     "What is the heading",
+     "Report heading"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "q_drift",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "drift_report",
+   "es": [
+    "((informe|reporte|informa|reporta|dame) (de |del |la |el )*)?(deriva|abatimiento|caida)( actual)?",
+    "como (cae|esta cayendo|va cayendo)( la)? (proa|popa)",
+    "como (caen|estan cayendo) (proa|popa|proa y popa)"
+   ],
+   "en": [
+    "(drift|leeway|fall) report",
+    "report (the )?(drift|leeway|fall)",
+    "how is the (bow|stern) (falling|swinging|drifting)",
+    "(bow|stern) (fall|drift)"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Informe de deriva",
+     "¿Cómo cae la proa?"
+    ],
+    "en": [
+     "Report drift",
+     "How is the bow falling"
+    ]
+   }
+  },
+  {
+   "id": "q_recommend",
+   "cat": "Consultas",
+   "kind": "query",
+   "tool": "drift_report",
+   "es": [
+    "(alguna |tu |una )?(recomendacion|sugerencia|consejo)( para mantener el rumbo)?",
+    "(que|cual) (me )?(recomiendas|sugieres|aconsejas)",
+    "(recomienda|sugiere)"
+   ],
+   "en": [
+    "(any |your |a )?(recommendation|suggestion|advice)",
+    "what (do you|would you) (recommend|suggest|advise)",
+    "(recommend|suggest)"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Recomendación",
+     "¿Qué recomiendas?"
+    ],
+    "en": [
+     "Recommendation",
+     "What do you recommend"
+    ]
+   }
+  },
+  {
+   "id": "confirm",
+   "cat": "Confirmación",
+   "kind": "confirm",
+   "es": [
+    "(confirmo|confirmado|confirmar|si confirmo|si hazlo|si adelante|afirmativo|adelante|de acuerdo|si)"
+   ],
+   "en": [
+    "(confirm|confirmed|affirmative|yes|yes do it|go ahead|do it)"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Confirmo",
+     "Sí, hazlo"
+    ],
+    "en": [
+     "Confirm",
+     "Affirmative"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "cancel",
+   "cat": "Confirmación",
+   "kind": "cancel",
+   "es": [
+    "(cancela|cancelar|cancelo|negativo|no|no lo hagas|olvidalo|olvida)"
+   ],
+   "en": [
+    "(cancel|negative|no|abort|never mind|forget it)"
+   ],
+   "say": {
+    "es": "Cancelado.",
+    "en": "Cancelled."
+   },
+   "examples": {
+    "es": [
+     "Cancela",
+     "Negativo"
+    ],
+    "en": [
+     "Cancel",
+     "Negative"
+    ]
+   },
+   "guide": false
+  },
+  {
+   "id": "repeat",
+   "cat": "Consultas",
+   "kind": "repeat",
+   "es": [
+    "(repite|repita|repetir|di otra vez|como dices|que dijiste)"
+   ],
+   "en": [
+    "(say again|repeat|repeat that|again|come again)"
+   ],
+   "say": {
+    "es": null,
+    "en": null
+   },
+   "examples": {
+    "es": [
+     "Repite"
+    ],
+    "en": [
+     "Say again"
+    ]
+   },
+   "guide": false
+  }
+ ]
+}
