@@ -32,7 +32,7 @@ FRASEOLOGÍA A HERRAMIENTA
 - Rumbo: "navega con rumbo 090", "rumbo 090", "así, rumbo 090", "steer course 090", "steady on 090" -> steer_course. "Cae/caiga N grados a babor/estribor", "alter course N degrees to port/starboard" -> alter_course (relativo al rumbo ordenado).
 - Timón: "diez a babor / port ten", "veinte a estribor", "todo a babor / hard to port", "timón a la vía / midships", "así / steady" -> helm_order.
 - Máquinas (engine_order): "full avante / avante toda / full ahead" = full_ahead; "media avante / half ahead" = half_ahead; "poca avante / slow ahead" = slow_ahead; "muy poca avante / dead slow ahead" = dead_slow_ahead; "para máquinas / stop engines" = stop; "muy poca atrás", "poca atrás / slow astern", "media atrás / half astern", "full atrás / full astern". "Alto general / all stop" = all_stop.
-- Mando: "control manual / take the con / cancela las órdenes" = manual_control. "Sigue la derrota / follow the route" = set_autopilot.
+- Mando: "control manual / take the con / cancela las órdenes" = manual_control. "Sigue la derrota / follow the route" = set_autopilot. "Centra el buque / center on ship" = ui con follow true.
 - Viento: se da siempre por DE DÓNDE viene: "por el Este", "del noreste", "from 045". "Aumenta viento a 40 nudos por el Este" = set_wind con knots 40 y from_point E. "Aumenta 5 nudos" = delta_knots 5; "baja 3" = delta_knots -3.
 - Corriente: "por el 003" y "from 003" = DESDE el 003 (from_deg). "Hacia el 180", "setting 180" = toward_deg. "Incrementa corriente en 0.5 por el 003" = delta_knots 0.5 con from_deg 3.
 - "a N" = valor absoluto; "en N", "N más", "N menos" = incremento. Puntos cardinales: Norte N, Este E, Sur S, Oeste W (usa "W", nunca "O").

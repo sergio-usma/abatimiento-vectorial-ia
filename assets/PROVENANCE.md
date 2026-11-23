@@ -3,6 +3,7 @@
 | Archivo | Origen | Proceso |
 |---|---|---|
 | `map/z17-single.webp` | `map/z17-single.png` (5937 × 8160 px, RGBA, georreferenciado con `.pngw`, `.prj`, `.tab`) | Convertido con Pillow 13.0 (`Image.save(..., "WEBP", quality=80, method=6)`). Sin remuestreo: mismas dimensiones, mismos límites geográficos. 17.4 MB → 3.4 MB. |
+| `map/z17-overview.webp` | `map/z17-single.png` | Reducida a 1500 × 2062 px (LANCZOS, RGB) y guardada como WebP calidad 80 con Pillow 13.0. 330 KB. Solo la usa la vista general (mapa de referencia a zoom ≤ 15), para no decodificar dos veces el raster completo. |
 | `controles/control.webp` | `controles/control.png` (2048 × 2048 px, RGBA) | Reducido a 640 × 640 px (LANCZOS) y guardado como WebP calidad 88 con Pillow 13.0. 3.5 MB → 27 KB. |
 | `assets/fonts/*.woff2` | Google Fonts: Manrope (variable) y DM Mono 400/500, subconjuntos latin y latin-ext | Descargados con `impeccable font-fetch`. Licencia SIL OFL 1.1. |
 | `vendor/leaflet.*` | Leaflet 1.9.4 (unpkg) | Copia sin modificar. Licencia BSD-2-Clause. |

@@ -174,3 +174,12 @@ test('definiciones: nombres únicos, esquema válido, y todas tienen manejador',
   const t = VoiceTools.create(fakeSim());
   for(const n of names) assert.notEqual(t.execute(n, {}).error, 'unknown_tool', n);
 });
+
+test('ui admite follow y lo reenvía a la fachada', () => {
+  const sim = fakeSim(); const t = VoiceTools.create(sim);
+  const def = VoiceTools.definitions.find(d => d.name === 'ui');
+  assert.equal(def.parameters.properties.follow.type, 'boolean');
+  t.execute('ui', { follow: true });
+  t.execute('ui', { follow: false });
+  assert.deepEqual(sim.calls, [['ui', { follow: true }], ['ui', { follow: false }]]);
+});

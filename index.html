@@ -163,9 +163,6 @@
   #map{position:relative;width:100%;height:100%;background:#071820;container:map/inline-size;}
   .leaflet-container{background:#071820 !important;font-family:var(--ui);}
   .leaflet-container.ruta-activa{cursor:crosshair;}
-  .leaflet-bar{border:1px solid var(--line-2) !important;border-radius:var(--r1) !important;box-shadow:0 6px 18px rgba(0,0,0,.4) !important;overflow:hidden;}
-  .leaflet-bar a{width:34px !important;height:34px !important;line-height:34px !important;background:var(--s1) !important;color:var(--text) !important;border-bottom:1px solid var(--line) !important;}
-  .leaflet-bar a:hover{background:var(--s3) !important;}
   .leaflet-control-attribution{background:rgba(8,21,30,.85) !important;color:var(--text-3) !important;font-size:11px !important;}
   .leaflet-control-attribution a{color:var(--accent) !important;}
   .leaflet-popup-content-wrapper{background:var(--s1);color:var(--text);border:1px solid var(--line-2);border-radius:var(--r1);box-shadow:0 8px 24px rgba(0,0,0,.5);}
@@ -209,8 +206,9 @@
   #xteBarFill{position:absolute;top:0;bottom:0;left:50%;width:3px;background:var(--accent);transition:left .1s linear;}
 
   /* Rosa de los vientos */
-  #rosaVientos{position:absolute;z-index:900;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:rgba(8,21,30,.78);border:1px solid var(--line-2);border-radius:50%;}
-  #rosaVientos.mini{top:12px;right:12px;width:64px;height:64px;box-shadow:0 6px 18px rgba(0,0,0,.4);}
+  #rosaVientos{position:absolute;z-index:900;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:rgba(8,21,30,.78);border:1px solid var(--line-2);border-radius:50%;}
+  /* Esquina inferior izquierda: la rosa va justo encima del cursor (cursor = 50 px de alto + 8 px de aire). */
+  #rosaVientos.mini{left:12px;bottom:calc(var(--lift,0px) + 70px);width:var(--stack-w,190px);height:var(--stack-w,190px);box-shadow:0 6px 18px rgba(0,0,0,.4);}
   #rosaVientos.mini:hover{border-color:var(--accent);}
   #rosaVientos.expandida{top:50%;left:50%;transform:translate(-50%,-50%);width:340px;height:340px;background:rgba(8,21,30,.82);box-shadow:0 24px 60px rgba(0,0,0,.6);cursor:default;}
   #rosaVientos.mini #rosaCerrar,#rosaVientos.mini #rosaReadout,#rosaVientos.mini #rosaZoomHint{display:none;}
@@ -221,11 +219,11 @@
   #rosaZoomHint{position:absolute;bottom:8px;font-size:11px;color:var(--text-3);pointer-events:none;}
 
   /* Fuerzas */
-  #forceDiagram{top:100px;left:12px;width:196px;}
-  #forceDiagram>summary{display:flex;align-items:center;gap:8px;min-height:34px;padding:0 12px;list-style:none;cursor:pointer;font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);}
-  #forceDiagram>summary::-webkit-details-marker{display:none;}
-  #forceDiagram>summary::after{content:"";margin-left:auto;width:12px;height:12px;background:currentColor;opacity:.7;transition:transform .2s var(--ease);-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center/contain no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") center/contain no-repeat;}
-  #forceDiagram[open]>summary::after{transform:rotate(180deg);}
+  #forceDiagram{top:56px;left:12px;width:196px;max-height:var(--fd-max,none);overflow:hidden;display:flex;flex-direction:column;}
+  #forceDiagram[hidden],#forceDiagram.tiny{display:none;}
+  #forceDiagram.compact .fd-readout{display:none;}
+  #forceDiagram .fd-body{overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;}
+  .fd-title{display:flex;align-items:center;min-height:30px;padding:0 12px;font:800 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);}
   .fd-body{padding:0 10px 10px;}
   #forceDiagramCanvas{display:block;width:174px;height:150px;margin:0 auto 6px;}
   .fd-legend{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 10px;margin-bottom:6px;font-size:12px;color:var(--text-2);}
@@ -238,9 +236,10 @@
   .fd-readout .net>span:last-child{color:var(--warn);}
 
   /* Cursor ECDIS */
-  #cursorStatus{position:absolute;left:12px;bottom:12px;z-index:700;display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surf);border:1px solid var(--line-2);border-radius:var(--r1);font:500 12px var(--mono);white-space:nowrap;pointer-events:none;}
-  #cursorStatus .status-label{font:800 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--accent);}
-  #cursorStatus em{font-style:normal;color:var(--stbd);}
+  #cursorStatus{position:absolute;left:12px;bottom:calc(var(--lift,0px) + 12px);z-index:700;width:var(--stack-w,190px);display:flex;flex-direction:column;gap:2px;padding:6px 10px;background:var(--surf);border:1px solid var(--line-2);border-radius:var(--r1);font:500 12px var(--mono);white-space:nowrap;pointer-events:none;}
+  #cursorStatus .cs-row{display:flex;justify-content:space-between;gap:8px;}
+  #cursorStatus .cs-k{font:800 11px var(--ui);letter-spacing:.08em;color:var(--accent);}
+  #cursorStatus .cs-v{color:var(--stbd);}
 
   /* ---------- Consola ASD ---------- */
   #simDock{left:50%;bottom:12px;transform:translateX(-50%);width:max-content;max-width:calc(100% - 24px);z-index:600;display:grid;grid-template-columns:auto 128px auto;gap:14px;align-items:stretch;padding:12px 14px;}
@@ -317,6 +316,35 @@
   .phrase:hover{background:var(--s2);border-color:var(--accent);}
   .phrase:active{transform:translateY(1px);}
 
+  /* ---------- North arrow, botón Centrar y vista general ---------- */
+  #northArrow{position:absolute;top:12px;right:12px;z-index:650;width:56px;height:56px;pointer-events:none;filter:drop-shadow(0 4px 10px rgba(0,0,0,.4));}
+  #northArrow svg{display:block;width:100%;height:100%;}
+  #northArrow .na-bg{fill:var(--surf);stroke:var(--line-2);stroke-width:1;}
+  #northArrow .na-head{fill:var(--text);}
+  #northArrow .na-tail{fill:var(--text-3);opacity:.55;}
+  #northArrow .na-n{fill:var(--accent);font:800 11px var(--mono);}
+  /* Botón suelto sobre la carta (diagrama de fuerzas) y barra de herramientas (zoom, seguir, vista general). */
+  .map-btn{position:absolute;z-index:650;left:12px;top:12px;display:grid;place-items:center;width:36px;height:36px;padding:0;background:var(--surf);border:1px solid var(--line-2);border-radius:var(--r1);color:var(--text-2);cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.4);transition:background .15s,color .15s,border-color .15s;}
+  .map-btn:hover:not(:disabled){background:var(--s3);color:var(--text);}
+  .map-btn[aria-pressed="true"]{color:var(--accent);background:var(--s1);border-color:rgba(95,214,208,.5);}
+  .map-btn:disabled{opacity:.4;cursor:default;}
+  #mapTools{right:12px;bottom:calc(var(--lift-r,0px) + 12px);z-index:700;display:flex;flex-direction:column;width:38px;overflow:hidden;border-radius:var(--r2);}
+  .tool{display:grid;place-items:center;flex:none;width:36px;height:36px;padding:0;border:0;background:transparent;color:var(--text-2);cursor:pointer;transition:background .15s,color .15s;}
+  .tool:hover:not(:disabled){background:var(--s3);color:var(--text);}
+  .tool:disabled{opacity:.4;cursor:default;}
+  .tool[aria-pressed="true"]{color:var(--accent);background:var(--accent-soft);}
+  .tool:focus-visible{outline-offset:-3px;}
+  .tool-sep{display:block;flex:none;height:1px;margin:3px 7px;background:var(--line-2);}
+  @media (pointer:coarse){ .tool{width:44px;height:44px;} #mapTools{width:46px;} .map-btn{width:44px;height:44px;} }
+  #overview{top:76px;right:12px;width:200px;z-index:700;overflow:hidden;}
+  .ov-head{display:flex;align-items:center;gap:6px;height:30px;padding:0 6px 0 10px;border-bottom:1px solid var(--line);}
+  .ov-title{margin-right:auto;font:800 11px var(--ui);letter-spacing:.08em;text-transform:uppercase;color:var(--text-2);white-space:nowrap;}
+  .ov-chip{height:22px;padding:0 9px;border:1px solid var(--line-2);border-radius:999px;background:var(--s0);color:var(--text-2);font:700 11px var(--ui);cursor:pointer;}
+  .ov-chip:hover{color:var(--text);border-color:var(--accent);}
+  #ovMap{width:100%;height:150px;background:#071820;}
+  #overview[hidden]{display:none;}
+  #ovMap .leaflet-container{background:#071820 !important;}
+
   /* ---------- Avisos ---------- */
   .shallow-warning{position:fixed;top:60px;left:50%;transform:translateX(-50%);z-index:9999;display:none;align-items:center;gap:8px;padding:9px 18px;background:var(--warn);color:#241a02;border-radius:var(--r1);font-size:13px;font-weight:800;box-shadow:0 10px 28px rgba(0,0,0,.45);animation:pulse 1.4s ease-in-out infinite;}
   #toast{position:fixed;top:60px;left:50%;transform:translate(-50%,-8px);z-index:9998;max-width:min(420px,calc(100% - 32px));padding:10px 14px;background:var(--s2);border:1px solid var(--line-2);border-radius:var(--r1);box-shadow:0 10px 28px rgba(0,0,0,.5);font-size:13px;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s,transform .2s var(--ease);}
@@ -331,9 +359,6 @@
   #crashInfo{margin:8px 0 18px;font:500 13px/1.6 var(--mono);color:var(--text-2);}
 
   /* ---------- Adaptación ---------- */
-  @container map (max-width:940px){
-    #cursorStatus{bottom:calc(var(--dock-h,232px) + 22px);}
-  }
   @container map (max-width:760px){
     #simDock{grid-template-columns:auto 108px auto;gap:8px;padding:10px;}
     .azimuth-control{width:104px;} .thr-track{width:30px;height:104px;}
@@ -363,7 +388,6 @@
     #map{order:2;height:72vh;min-height:520px;flex:none;}
     .panel{order:3;overflow:visible;border:0 !important;border-top:1px solid var(--line) !important;}
     #panelTelemetria{order:4;}
-    #rosaVientos.mini{width:56px;height:56px;}
   }
   @media (max-width:480px){
     header h1{display:none;}
@@ -398,6 +422,10 @@
     <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></symbol>
     <symbol id="i-volume-off" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4zM17 9l5 6M22 9l-5 6"/></symbol>
     <symbol id="i-send" viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-7z"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4L3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></symbol>
+    <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-vectors" viewBox="0 0 24 24"><path d="M12 13V4M9 7l3-3 3 3M12 13l6.5 5M19.5 14v4.5H15M12 13l-6.5 5M4.5 14v4.5H9"/></symbol>
   </defs>
 </svg>
 <a class="skip-link" href="#map">Ir a la carta</a>
@@ -523,12 +551,35 @@
 
   <div id="map" role="application" aria-label="Carta náutica de la bahía de Cartagena">
     <div id="seaWaves" aria-hidden="true"></div>
-    <canvas id="currentFlowCanvas" aria-hidden="true"></canvas>
-    <div id="cursorStatus" aria-live="off">
-      <span class="status-label">Cursor</span>
-      <span class="status-coord" id="cursorCoordinates">— · —</span>
+    <div id="northArrow" role="img" aria-label="Norte arriba" title="Norte arriba">
+      <svg viewBox="0 0 56 56" aria-hidden="true" focusable="false" style="transform-origin:50% 50%">
+        <circle class="na-bg" cx="28" cy="28" r="26.5"/>
+        <path class="na-tail" d="M28 31 L35.5 46 L28 42 L20.5 46 Z"/>
+        <path class="na-head" d="M28 12 L35.5 33 L28 28.5 L20.5 33 Z"/>
+        <text class="na-n" x="28" y="10.5" text-anchor="middle">N</text>
+      </svg>
     </div>
-    <div id="rosaVientos" class="mini" role="button" tabindex="0" aria-label="Rosa de los vientos: ampliar" onclick="onClickRosa(event)" onkeydown="if(event.target!==this)return;if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRosa(true);}" title="Rosa de los vientos">
+    <button class="map-btn" id="btnForce" type="button" aria-pressed="false" aria-controls="forceDiagram" aria-label="Mostrar diagrama de fuerzas" title="Mostrar diagrama de fuerzas"><svg class="i" aria-hidden="true"><use href="#i-vectors"/></svg></button>
+    <section id="overview" class="float" aria-label="Vista general" hidden>
+      <div class="ov-head">
+        <span class="ov-title">Vista general</span>
+        <button class="ov-chip" id="ovMode" type="button" title="Alternar entre seguir al buque y carta completa">Seguir</button>
+      </div>
+      <div id="ovMap" role="img" aria-label="Mapa de referencia con la posición del buque"></div>
+    </section>
+    <div id="mapTools" class="float" role="toolbar" aria-label="Herramientas de la carta" aria-orientation="vertical">
+      <button class="tool" id="btnZoomIn" type="button" aria-label="Acercar" title="Acercar (+)"><svg class="i" aria-hidden="true"><use href="#i-plus"/></svg></button>
+      <button class="tool" id="btnZoomOut" type="button" aria-label="Alejar" title="Alejar (−)"><svg class="i" aria-hidden="true"><use href="#i-minus"/></svg></button>
+      <span class="tool-sep" role="separator"></span>
+      <button class="tool" id="btnCenter" type="button" aria-pressed="true" aria-label="Centrar y seguir al buque" title="Siguiendo al buque"><svg class="i" aria-hidden="true"><use href="#i-locate"/></svg></button>
+      <button class="tool" id="ovToggle" type="button" aria-pressed="true" aria-controls="overview" aria-label="Ocultar vista general" title="Ocultar vista general"><svg class="i" aria-hidden="true"><use href="#i-map"/></svg></button>
+    </div>
+    <canvas id="currentFlowCanvas" aria-hidden="true"></canvas>
+    <div id="cursorStatus" aria-live="off" title="Posición del cursor en la carta">
+      <span class="cs-row"><span class="cs-k">LAT</span><span class="cs-v" id="cursorLat">—</span></span>
+      <span class="cs-row"><span class="cs-k">LON</span><span class="cs-v" id="cursorLon">—</span></span>
+    </div>
+    <div id="rosaVientos" class="mini" role="button" tabindex="0" aria-label="Radar de rumbos: ampliar" onclick="onClickRosa(event)" onkeydown="if(event.target!==this)return;if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleRosa(true);}" title="Radar: rumbo de proa (verde) y rumbo real (cian)">
       <button id="rosaCerrar" type="button" onclick="event.stopPropagation(); toggleRosa(false);" aria-label="Minimizar rosa"><svg class="i" aria-hidden="true"><use href="#i-close"/></svg></button>
       <canvas id="rosaCanvas" width="340" height="340" aria-hidden="true"></canvas>
       <div id="rosaReadout">—</div>
@@ -552,8 +603,8 @@
         <button class="btn" id="confirmNo" type="button">No</button>
       </div>
     </div>
-    <details id="forceDiagram" class="float" open>
-      <summary>Fuerzas</summary>
+    <section id="forceDiagram" class="float" aria-label="Diagrama de fuerzas" hidden>
+      <div class="fd-title">Fuerzas</div>
       <div class="fd-body">
         <canvas id="forceDiagramCanvas" width="174" height="150" role="img" aria-label="Diagrama de fuerzas del buque"></canvas>
         <div class="fd-legend">
@@ -570,7 +621,7 @@
           <div class="row"><span>Empuje</span><span id="fdFNet">—</span></div>
         </div>
       </div>
-    </details>
+    </section>
 
     <div id="simDock" class="float" role="group" aria-label="Consola de propulsores azimutales">
       <section class="thr-unit port" aria-label="Propulsor de babor">
@@ -718,6 +769,7 @@
           <button class="phrase" type="button">Control manual</button>
           <button class="phrase" type="button">Sigue la derrota</button>
           <button class="phrase" type="button">Informa el estado</button>
+          <button class="phrase" type="button">Centra el buque</button>
         </div>
         <div class="guide" id="guideEn" role="tabpanel" aria-labelledby="tabGuiaEn" hidden>
           <h4>Course</h4>
@@ -746,6 +798,7 @@
           <button class="phrase" type="button">Take the con</button>
           <button class="phrase" type="button">Follow the route</button>
           <button class="phrase" type="button">Report status</button>
+          <button class="phrase" type="button">Center on ship</button>
         </div>
         <p class="hint">Basada en las IMO SMCP y las órdenes estándar de timón.</p>
       </div>
@@ -781,12 +834,20 @@ const SOUNDINGS = [[9.95, -75.9, 61.4], [9.95, -75.86095, 38.8], [9.95, -75.8218
 const CHART_BOUNDS = [[10.2628766656853, -75.6151413917542], [10.4351227208919, -75.4877471923828]];
 const CHART_INITIAL_ZOOM = 17;
 const bounds = CHART_BOUNDS;
+/* Límite de navegación = la carta con un margen del 25 % por lado: así el buque puede quedar
+   centrado aunque esté cerca del borde (fuera del raster se ve el fondo oscuro, como en un simulador). */
+function boundsConMargen(b, f){
+  const dLat = (b[1][0]-b[0][0])*f, dLon = (b[1][1]-b[0][1])*f;
+  return L.latLngBounds([b[0][0]-dLat, b[0][1]-dLon], [b[1][0]+dLat, b[1][1]+dLon]);
+}
 const map = L.map('map', {
   crs:L.CRS.EPSG3857,
-  zoomControl:true,
+  zoomControl:false,   // el zoom vive en #mapTools, junto al resto de herramientas de la carta
   attributionControl:false,
-  maxBounds:L.latLngBounds(CHART_BOUNDS),
-  maxBoundsViscosity:1
+  maxBounds:boundsConMargen(CHART_BOUNDS, 0.25),
+  maxBoundsViscosity:1,
+  // El buque va al centro: el zoom también se hace sobre el centro para no mover la vista.
+  scrollWheelZoom:'center', touchZoom:'center', doubleClickZoom:'center'
 });
 L.imageOverlay('map/z17-single.webp', CHART_BOUNDS, {opacity:1, interactive:false}).addTo(map);
 const chartExtent = L.latLngBounds(CHART_BOUNDS);
@@ -819,10 +880,12 @@ function gradosMinutosSegundos(value, isLat){
   return `${String(grados).padStart(isLat?2:3,'0')}°${String(minutos).padStart(2,'0')}'${segundos.toFixed(1).padStart(4,'0')}"${hemi}`;
 }
 function actualizarPosicionCursor(e){
-  document.getElementById('cursorCoordinates').innerHTML = `LAT <em>${gradosMinutosSegundos(e.latlng.lat,true)}</em> · LON <em>${gradosMinutosSegundos(e.latlng.lng,false)}</em>`;
+  document.getElementById('cursorLat').textContent = gradosMinutosSegundos(e.latlng.lat,true);
+  document.getElementById('cursorLon').textContent = gradosMinutosSegundos(e.latlng.lng,false);
 }
 function limpiarPosicionCursor(){
-  document.getElementById('cursorCoordinates').textContent = 'LAT — · LON —';
+  document.getElementById('cursorLat').textContent = '—';
+  document.getElementById('cursorLon').textContent = '—';
 }
 map.on('mousemove', actualizarPosicionCursor);
 map.on('mouseout', limpiarPosicionCursor);
@@ -1082,65 +1145,111 @@ function initRosaZoom(){
   }, {passive:false});
 }
 function dibujarRosaVientos(){
+  /* RADAR de rumbos (norte arriba, como la carta): barrido giratorio con estela, onda que se expande desde el buque,
+     anillos de distancia y bisel graduado. Sobre él: línea de proa (HDG), rumbo real (COG), y las marcas de viento y corriente.
+     No dibuja blancos: solo muestra datos reales del simulador. */
   const canvas = document.getElementById('rosaCanvas');
   if(!canvas) return;
+  const S = Math.round(canvas.clientWidth);
+  if(!S) return;
+  const dpr = Math.min(3, window.devicePixelRatio || 1), px = Math.round(S*dpr);
+  if(canvas.width !== px){ canvas.width = px; canvas.height = px; }
   const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height, cx=w/2, cy=h/2, R=w/2-30;
-  ctx.clearRect(0,0,w,h);
-  // En modo mini se omiten las etiquetas de texto (ilegibles a ese
-  // tamaño) para que se vea como un ícono limpio; en modo expandido se
-  // dibuja la graduación completa.
-  const detalle = rosaExpandida;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,S,S);
+  const cx = S/2, cy = S/2, R = S/2 - 1.5, detalle = rosaExpandida;
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const t = performance.now();
+  const ACC = '95,214,208';
+  const pol = (deg, r)=>({x: cx + Math.sin(deg*D2R)*r, y: cy - Math.cos(deg*D2R)*r});
 
-  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2);
-  ctx.fillStyle='rgba(10,25,41,.3)'; ctx.fill();
-  ctx.strokeStyle='rgba(47,212,232,.55)'; ctx.lineWidth=1.4; ctx.stroke();
-  if(detalle){
-    [0.5,0.75].forEach(f=>{ ctx.beginPath(); ctx.arc(cx,cy,R*f,0,Math.PI*2); ctx.strokeStyle='rgba(47,212,232,.15)'; ctx.lineWidth=1; ctx.stroke(); });
+  // --- Pantalla: fondo, retícula, onda y barrido (recortados al disco) ---
+  ctx.save();
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.clip();
+  const bg = ctx.createRadialGradient(cx,cy,0,cx,cy,R);
+  bg.addColorStop(0,'#0a2a2e'); bg.addColorStop(.65,'#06202a'); bg.addColorStop(1,'#041219');
+  ctx.fillStyle = bg; ctx.fillRect(0,0,S,S);
+
+  ctx.lineWidth = 1;
+  [.25,.5,.75].forEach(f=>{ ctx.beginPath(); ctx.arc(cx,cy,R*f,0,Math.PI*2); ctx.strokeStyle = `rgba(${ACC},.16)`; ctx.stroke(); });
+  ctx.beginPath(); ctx.moveTo(cx,cy-R); ctx.lineTo(cx,cy+R); ctx.moveTo(cx-R,cy); ctx.lineTo(cx+R,cy);
+  ctx.strokeStyle = `rgba(${ACC},.12)`; ctx.stroke();
+
+  if(!reduce){
+    // Onda: un anillo que nace en el buque y se desvanece al llegar al borde.
+    const pulse = (t % 2600) / 2600;
+    ctx.beginPath(); ctx.arc(cx,cy,pulse*R,0,Math.PI*2);
+    ctx.strokeStyle = `rgba(${ACC},${(0.34*(1-pulse)).toFixed(3)})`; ctx.lineWidth = 1.5; ctx.stroke();
   }
+  // Barrido: línea que gira (una vuelta cada 3,2 s) y estela de 75°; con movimiento reducido queda fija.
+  const sweepDeg = reduce ? 40 : ((t % 3200) / 3200) * 360;
+  const a = (sweepDeg - 90) * D2R, trail = 75 * D2R;
+  if(typeof ctx.createConicGradient === 'function'){
+    const cg = ctx.createConicGradient(a - trail, cx, cy);
+    const k = trail / (Math.PI*2);
+    cg.addColorStop(0, `rgba(${ACC},0)`); cg.addColorStop(k, `rgba(${ACC},.36)`); cg.addColorStop(Math.min(.999, k+.0005), `rgba(${ACC},0)`); cg.addColorStop(1, `rgba(${ACC},0)`);
+    ctx.fillStyle = cg; ctx.fillRect(0,0,S,S);
+  } else {
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,R,a-trail,a); ctx.closePath(); ctx.fillStyle = `rgba(${ACC},.16)`; ctx.fill();
+  }
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(cx + Math.cos(a)*R, cy + Math.sin(a)*R);
+  ctx.strokeStyle = `rgba(${ACC},.85)`; ctx.lineWidth = 1.5; ctx.stroke();
+  ctx.restore();
 
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  const paso = detalle? 5 : 30;
+  // --- Bisel graduado ---
+  ctx.beginPath(); ctx.arc(cx,cy,R,0,Math.PI*2); ctx.strokeStyle = 'rgba(158,205,214,.38)'; ctx.lineWidth = 1; ctx.stroke();
+  const paso = detalle ? 5 : 10;
   for(let d=0; d<360; d+=paso){
-    const rad=d*D2R, major=d%30===0, med=d%10===0;
-    const rIn = major? R-16 : med? R-9 : R-5;
-    const x1=cx+Math.sin(rad)*R, y1=cy-Math.cos(rad)*R;
-    const x2=cx+Math.sin(rad)*rIn, y2=cy-Math.cos(rad)*rIn;
-    ctx.strokeStyle = major? 'rgba(207,227,240,.85)' : med? 'rgba(150,185,205,.55)' : 'rgba(110,145,165,.35)';
-    ctx.lineWidth = major? 1.8 : 1;
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-    if(major){
-      const labels={0:'N',90:'E',180:'S',270:'O'};
-      const lx=cx+Math.sin(rad)*(R-28), ly=cy-Math.cos(rad)*(R-28);
-      ctx.fillStyle = labels[d]? '#4ade80' : '#cfe3f0';
-      ctx.font = (labels[d]?'bold ':'')+(detalle?16:12)+'px "DM Mono", monospace';
-      if(detalle || labels[d]) ctx.fillText(labels[d] || String(d).padStart(3,'0'), lx, ly);
-    }
+    const major = d%30===0, med = d%10===0;
+    const len = major ? 9 : med ? 6 : 3.5;
+    const p1 = pol(d,R), p2 = pol(d,R-len);
+    ctx.strokeStyle = major ? 'rgba(230,239,239,.8)' : med ? 'rgba(167,191,196,.55)' : 'rgba(132,160,168,.4)';
+    ctx.lineWidth = major ? 1.4 : 1;
+    ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+  }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  const labels = {0:'N', 90:'E', 180:'S', 270:'O'};
+  const fs = detalle ? 14 : 12;
+  [0,90,180,270].forEach(d=>{
+    const p = pol(d, R - (detalle ? 22 : 19));
+    ctx.fillStyle = d===0 ? `rgb(${ACC})` : '#a7bfc4';
+    ctx.font = `700 ${fs}px "DM Mono", monospace`;
+    ctx.fillText(labels[d], p.x, p.y);
+  });
+  if(detalle){
+    ctx.font = '500 11px "DM Mono", monospace'; ctx.fillStyle = 'rgba(167,191,196,.85)';
+    for(let d=30; d<360; d+=30){ if(d%90===0) continue; const p = pol(d, R-22); ctx.fillText(String(d).padStart(3,'0'), p.x, p.y); }
   }
 
-  function agujaDiametro(deg,color,width,dashed){
-    const rad=deg*D2R;
-    const x1=cx+Math.sin(rad)*R, y1=cy-Math.cos(rad)*R;       // extremo = rumbo
-    const x2=cx-Math.sin(rad)*R, y2=cy+Math.cos(rad)*R;       // extremo opuesto = contrarumbo
-    ctx.save();
-    if(dashed) ctx.setLineDash([7,6]);
-    ctx.strokeStyle=color; ctx.lineWidth=width;
-    ctx.beginPath(); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke();
-    ctx.restore();
-    ctx.fillStyle=color;
+  // --- Viento (rojo, entra desde su procedencia) y corriente (violeta, sale hacia su destino) en el borde ---
+  const amb = leerAmbiente();
+  function marca(deg, color, hacia){
+    const base = pol(deg, R-12), tip = pol(deg, hacia ? R-3 : R-21);
+    const ang = Math.atan2(tip.y-base.y, tip.x-base.x), w = 4.2;
+    ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(x1,y1);
-    ctx.lineTo(x1-10*Math.sin(rad-2.7), y1+10*Math.cos(rad-2.7));
-    ctx.lineTo(x1-10*Math.sin(rad+2.7), y1+10*Math.cos(rad+2.7));
+    ctx.moveTo(tip.x, tip.y);
+    ctx.lineTo(base.x + Math.cos(ang+Math.PI/2)*w, base.y + Math.sin(ang+Math.PI/2)*w);
+    ctx.lineTo(base.x + Math.cos(ang-Math.PI/2)*w, base.y + Math.sin(ang-Math.PI/2)*w);
     ctx.closePath(); ctx.fill();
   }
+  if(amb.vKn > 0) marca(amb.vDirFrom, '#ef4444', false);
+  if(amb.cKn > 0) marca(amb.cDirTo, '#a78bfa', true);
 
+  // --- Línea de proa (HDG), rumbo real (COG) y buque ---
   const hdgDeg = estado.ultimoHDG!=null ? estado.ultimoHDG : norm360(estado.heading*R2D);
   const cogDeg = estado.ultimoCOG!=null ? estado.ultimoCOG : hdgDeg;
-  agujaDiametro(cogDeg, '#00d4ff', detalle?2.2:1.8, true); // COG detrás (punteado)
-  agujaDiametro(hdgDeg, '#4ade80', detalle?2.8:2.2, false); // HDG encima (sólido)
-
-  ctx.beginPath(); ctx.arc(cx,cy,detalle?3.2:2.4,0,Math.PI*2); ctx.fillStyle='#e8f4fa'; ctx.fill();
+  const pc = pol(cogDeg, R*0.78);
+  ctx.save(); ctx.setLineDash([5,4]);
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(pc.x,pc.y); ctx.strokeStyle = '#00d4ff'; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.restore();
+  const ph = pol(hdgDeg, R-2);
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(ph.x,ph.y); ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.stroke();
+  // buque propio
+  const hs = detalle ? 8 : 6;
+  const b1 = pol(hdgDeg, hs*1.5), b2 = pol(hdgDeg+150, hs), b3 = pol(hdgDeg-150, hs);
+  ctx.beginPath(); ctx.moveTo(b1.x,b1.y); ctx.lineTo(b2.x,b2.y); ctx.lineTo(b3.x,b3.y); ctx.closePath();
+  ctx.fillStyle = '#e6efef'; ctx.fill();
 
   if(detalle){
     const contraHdg = norm360(hdgDeg+180), contraCog = norm360(cogDeg+180);
@@ -1344,24 +1453,38 @@ function dibujarDiagramaFuerzas(){
   const canvas = document.getElementById('forceDiagramCanvas');
   if(!canvas || !ship) return;
   const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
+  // Tamaño lógico fijo (el contenedor no cambia); el almacén se escala por dpr para que se vea nítido.
+  const FD_W = 174, FD_H = 150, dpr = Math.min(3, window.devicePixelRatio || 1);
+  if(canvas.width !== Math.round(FD_W*dpr)){ canvas.width = Math.round(FD_W*dpr); canvas.height = Math.round(FD_H*dpr); }
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  const w = FD_W, h = FD_H;
   ctx.clearRect(0,0,w,h);
   const F = calcularFuerzas();
 
-  const cx = w/2, cy = 66, pxm = 1.55;
-  const scaleF = 34/(ship.thrustMax*0.5 || 1);   // px por N (un solo propulsor)
-  const scaleNet = 40/(ship.thrustMax || 1);     // px por N (resultante, hasta el doble)
-  const scaleWind = 26/Math.max(F.fWindMag,1);
+  // Dibujo ~40 % mayor que antes (casco 1,55 -> 2,17 px/m; flechas 34/40/26 -> 48/56/36 px) dentro de la misma caja.
+  const cx = w/2, cy = 68, pxm = 2.17;
+  const scaleF = 48/(ship.thrustMax*0.5 || 1);   // px por N (un solo propulsor)
+  const scaleNet = 56/(ship.thrustMax || 1);     // px por N (resultante, hasta el doble)
+  const scaleWind = 36/Math.max(F.fWindMag,1);
 
   function localToCanvas(x,y){ return { px: cx + y*pxm, py: cy - x*pxm }; }
+  // Garantía de no desborde: el extremo de toda flecha se recorta a 6 px del borde del canvas.
+  function clampTip(x0,y0,x1,y1){
+    const m = 6, dx = x1-x0, dy = y1-y0; let t = 1;
+    if(dx>0) t = Math.min(t,(w-m-x0)/dx); else if(dx<0) t = Math.min(t,(m-x0)/dx);
+    if(dy>0) t = Math.min(t,(h-m-y0)/dy); else if(dy<0) t = Math.min(t,(m-y0)/dy);
+    t = Math.max(0,t);
+    return [x0+dx*t, y0+dy*t];
+  }
   function arrow(x0,y0,x1,y1,color,width){
+    [x1,y1] = clampTip(x0,y0,x1,y1);
     ctx.strokeStyle=color; ctx.fillStyle=color; ctx.lineWidth=width;
     ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.stroke();
     const ang=Math.atan2(y1-y0,x1-x0);
     ctx.beginPath();
     ctx.moveTo(x1,y1);
-    ctx.lineTo(x1-6*Math.cos(ang-0.4), y1-6*Math.sin(ang-0.4));
-    ctx.lineTo(x1-6*Math.cos(ang+0.4), y1-6*Math.sin(ang+0.4));
+    ctx.lineTo(x1-8*Math.cos(ang-0.4), y1-8*Math.sin(ang-0.4));
+    ctx.lineTo(x1-8*Math.cos(ang+0.4), y1-8*Math.sin(ang+0.4));
     ctx.closePath(); ctx.fill();
   }
 
@@ -1375,26 +1498,26 @@ function dibujarDiagramaFuerzas(){
   ctx.lineTo(cx-halfBeam*0.9, cy-halfLen*0.32);
   ctx.closePath();
   ctx.fillStyle='rgba(74,222,128,.07)'; ctx.fill();
-  ctx.strokeStyle='#2c4d6c'; ctx.lineWidth=1; ctx.stroke();
-  ctx.fillStyle='#4ade80'; ctx.font='bold 11px "DM Mono", monospace'; ctx.textAlign='center';
-  ctx.fillText('PROA', cx, cy-halfLen-4);
+  ctx.strokeStyle='#3d6a8f'; ctx.lineWidth=1.3; ctx.stroke();
+  ctx.fillStyle='#4ade80'; ctx.font='bold 12px "DM Mono", monospace'; ctx.textAlign='center';
+  ctx.fillText('PROA', cx, cy-halfLen-5);
 
   const pP = localToCanvas(F.xP,F.yP), pS = localToCanvas(F.xS,F.yS);
   ctx.fillStyle='#7f9cb3';
-  ctx.beginPath(); ctx.arc(pP.px,pP.py,2,0,Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(pS.px,pS.py,2,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(pP.px,pP.py,2.8,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(pS.px,pS.py,2.8,0,Math.PI*2); ctx.fill();
 
   // Empuje de cada propulsor: SOLO control, nada de ambiente
-  if(Math.hypot(F.FxP,F.FyP)>1) arrow(pP.px,pP.py, pP.px+F.FyP*scaleF, pP.py-F.FxP*scaleF, '#2fd4e8', 2.2);
-  if(Math.hypot(F.FxS,F.FyS)>1) arrow(pS.px,pS.py, pS.px+F.FyS*scaleF, pS.py-F.FxS*scaleF, '#fbbf24', 2.2);
+  if(Math.hypot(F.FxP,F.FyP)>1) arrow(pP.px,pP.py, pP.px+F.FyP*scaleF, pP.py-F.FxP*scaleF, '#2fd4e8', 2.8);
+  if(Math.hypot(F.FxS,F.FyS)>1) arrow(pS.px,pS.py, pS.px+F.FyS*scaleF, pS.py-F.FxS*scaleF, '#fbbf24', 2.8);
 
   const cg = localToCanvas(0,0);
-  if(Math.hypot(F.FxProp,F.FyProp)>1) arrow(cg.px,cg.py, cg.px+F.FyProp*scaleNet, cg.py-F.FxProp*scaleNet, '#4ade80', 3);
+  if(Math.hypot(F.FxProp,F.FyProp)>1) arrow(cg.px,cg.py, cg.px+F.FyProp*scaleNet, cg.py-F.FxProp*scaleNet, '#4ade80', 3.8);
 
   // Viento: rama de cálculo AMBIENTAL, aparte (línea punteada)
   if(F.fWindMag>50){
     ctx.save(); ctx.setLineDash([3,3]);
-    arrow(cg.px,cg.py, cg.px+F.windFy*scaleWind, cg.py-F.windFx*scaleWind, '#ef4444', 1.8);
+    arrow(cg.px,cg.py, cg.px+F.windFy*scaleWind, cg.py-F.windFx*scaleWind, '#ef4444', 2.3);
     ctx.restore();
   }
 
@@ -1402,9 +1525,9 @@ function dibujarDiagramaFuerzas(){
   const maxT = ship.maxTorque||1;
   const frac = Math.min(1, Math.abs(F.torqueTotal)/maxT);
   if(frac>0.015){
-    const r=22, dirRight = F.torqueTotal>0;
+    const r=31, dirRight = F.torqueTotal>0;
     ctx.strokeStyle = dirRight?'#fbbf24':'#2fd4e8';
-    ctx.lineWidth = 2+frac*2.2;
+    ctx.lineWidth = 2.6+frac*2.8;
     ctx.beginPath();
     if(dirRight) ctx.arc(cg.px,cg.py,r,-0.35,-0.35+0.25+frac*1.6,false);
     else ctx.arc(cg.px,cg.py,r,Math.PI+0.35,Math.PI+0.35-0.25-frac*1.6,true);
@@ -1554,7 +1677,7 @@ function borrarRuta(){ estado.ruta=[]; estado.wpIndex=0; estado.guia=null; redib
 function redibujarRuta(){
   routeLayer.clearLayers();
   const pts = estado.ruta.filter(p=>puntoDentroCarta(p.lat,p.lon));
-  if(pts.length===0){ document.getElementById('routeInfo').textContent='Sin derrota'; return; }
+  if(pts.length===0){ document.getElementById('routeInfo').textContent='Sin derrota'; ovSyncRoute(); return; }
   const latlngs = pts.map(p=>[p.lat,p.lon]);
   L.polyline(latlngs, {color:'#f97316', weight:2.5, dashArray:'6,5', opacity:.9}).addTo(routeLayer);
   let totalNM = 0, legsHtml = '';
@@ -1569,6 +1692,7 @@ function redibujarRuta(){
     }
   });
   document.getElementById('routeInfo').innerHTML = `${pts.length} puntos · <b>${totalNM.toFixed(2)} NM</b><br>${legsHtml}`;
+  ovSyncRoute();
 }
 
 /* =========================================================================
@@ -1796,7 +1920,8 @@ function ubicarBuque(){
   // desplazar libremente la carta como en un ECDIS, sin que el buque sea
   // recentrado automáticamente durante la navegación.
   map.setView([lat,lon], CHART_INITIAL_ZOOM, {animate:false});
-  trackLayer.clearLayers(); vectorLayer.clearLayers();
+  setFollow(true);   // ubicar el buque vuelve a centrar la carta sobre él
+  trackLayer.clearLayers(); vectorLayer.clearLayers(); ovClearTrack();
   estado.historial = {t:[],abat:[],deriva:[]};
   estado.tSim = 0;
   setTimeout(actualizarIconoBuque, 0); // asegura que la proa se vea correcta de inmediato
@@ -1997,6 +2122,7 @@ function frame(ts){
   requestAnimationFrame(frame);
   ctrlP.dibujar(); ctrlS.dibujar();
   actualizarIconoBuque();   // la proa se refleja siempre, incluso con la simulación en pausa
+  seguirBuque();
   dibujarCorrienteAnimada(); // animación de corriente ambiental, incluso en pausa
   dibujarDiagramaFuerzas();  // modelo de fuerzas en tiempo real, incluso en pausa
   estado.ultimoHDG = norm360(estado.heading*R2D);
@@ -2015,6 +2141,7 @@ function frame(ts){
   for(let i=0;i<subSteps;i++) pasoFisico(dtStep);
 
   const {lat,lon,hdgDeg} = actualizarIconoBuque();
+  seguirBuque();   // tras mover el buque: la carta se desplaza y el buque queda en el centro
 
   const amb = leerAmbiente();
   const cRad = amb.cDirTo*D2R;
@@ -2040,6 +2167,7 @@ function frame(ts){
   trackAccum += dtSim;
   if(trackAccum>1.2){
     trackAccum=0;
+    ovPushTrack(lat,lon);
     if(puntoDentroCarta(lat,lon)) L.circleMarker([lat,lon], {radius:1.6, color:'#00d4ff', fillColor:'#00d4ff', fillOpacity:.55, weight:0}).addTo(trackLayer);
     const layers = trackLayer.getLayers();
     if(layers.length>150) trackLayer.removeLayer(layers[0]);
@@ -2167,6 +2295,7 @@ function togglePanel(panelId){
     if(!map) return;
     map.invalidateSize();
     actualizarZoomMinimoCarta();
+    if(typeof layoutCorner === 'function') layoutCorner();
   }, 200);
 }
 function actualizarBotonPower(){
@@ -2230,7 +2359,7 @@ document.querySelector('.tabs').addEventListener('keydown', e=>{
 });
 // Las capas flotantes viven dentro del contenedor de Leaflet: sin esto, arrastrar una
 // rueda o palanca de la consola también desplaza la carta, y la rueda del ratón hace zoom.
-['simDock','forceDiagram','gameCompass'].forEach(id=>{
+['simDock','forceDiagram','gameCompass','cursorStatus'].forEach(id=>{
   const el = document.getElementById(id);
   if(!el) return;
   L.DomEvent.disableClickPropagation(el);
@@ -2240,19 +2369,197 @@ document.querySelector('.tabs').addEventListener('keydown', e=>{
     if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','PageUp','PageDown','Home','End','+','-'].includes(e.key)) e.stopPropagation();
   });
 });
-// La consola mide su altura para que el cursor ECDIS nunca la tape
-(function(){
-  const dock = document.getElementById('simDock'), map = document.getElementById('map');
-  if(!dock || !window.ResizeObserver) return;
-  new ResizeObserver(()=>map.style.setProperty('--dock-h', dock.offsetHeight+'px')).observe(dock);
-})();
+/* =========================================================================
+   11. CÁMARA QUE SIGUE AL BUQUE, VISTA GENERAL Y DISTRIBUCIÓN DE LA ESQUINA
+   ========================================================================= */
+estado.follow = true;
+function setFollow(on){
+  estado.follow = !!on;
+  const b = document.getElementById('btnCenter');
+  if(b){
+    b.setAttribute('aria-pressed', String(estado.follow));
+    b.title = estado.follow ? 'Siguiendo al buque' : 'Centrar y seguir al buque';
+  }
+  if(estado.follow) seguirBuque();
+}
+function seguirBuque(){
+  if(!estado.follow || !shipMarker || !shipBody || map._animatingZoom) return;
+  const p = map.latLngToContainerPoint(shipMarker.getLatLng()), s = map.getSize();
+  const dx = p.x - s.x/2, dy = p.y - s.y/2;
+  if(Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) map.panBy([dx, dy], {animate:false});
+}
+// Arrastrar la carta (ratón o dedo) pausa el seguimiento; el botón Centrar lo reanuda.
+map.on('dragstart', ()=>setFollow(false));
+document.getElementById('btnCenter').addEventListener('click', ()=>setFollow(!estado.follow));
+
+const OV = { map:null, ship:null, track:null, route:null, rect:null, mode:'follow', collapsed:false, userSet:false };
+const OV_ZOOM_OFFSET = 4, OV_MAX_ZOOM = 15, OV_MAX_TRACK = 600;
+function initOverview(){
+  const el = document.getElementById('ovMap');
+  if(OV.map || !el || !el.clientWidth || !map._loaded) return;   // el mapa principal debe tener ya centro y zoom
+  // Mapa de referencia sin interacción propia. Usa una miniatura (no el raster completo, que costaría ~190 MB decodificado).
+  OV.map = L.map(el, {crs:L.CRS.EPSG3857, zoomControl:false, attributionControl:false, dragging:false, scrollWheelZoom:false,
+    doubleClickZoom:false, boxZoom:false, keyboard:false, touchZoom:false, tap:false, inertia:false});
+  L.imageOverlay('map/z17-overview.webp', CHART_BOUNDS, {interactive:false}).addTo(OV.map);
+  OV.route = L.polyline([], {color:'#f97316', weight:2, dashArray:'4,3', opacity:.95, interactive:false}).addTo(OV.map);
+  OV.track = L.polyline([], {color:'#00d4ff', weight:2, opacity:.85, interactive:false}).addTo(OV.map);
+  OV.rect  = L.rectangle(map.getBounds(), {color:'#5fd6d0', weight:1.5, fillColor:'#5fd6d0', fillOpacity:.12, interactive:false}).addTo(OV.map);
+  const icon = L.divIcon({className:'', html:hullSVG('#4ade80').replace('width="30" height="30"','width="18" height="18"'), iconSize:[18,18], iconAnchor:[9,9]});
+  OV.ship = L.marker(shipMarker ? shipMarker.getLatLng() : [CHART_BOUNDS[0][0],CHART_BOUNDS[0][1]], {icon, interactive:false, keyboard:false}).addTo(OV.map);
+  OV.map.fitBounds(CHART_BOUNDS, {animate:false});
+  OV.map.on('click', e=>{ setFollow(false); map.setView(e.latlng, map.getZoom(), {animate:false}); });
+  ovSyncRoute(); ovUpdate(true);
+}
+function ovSyncRoute(){
+  if(!OV.map) return;
+  OV.route.setLatLngs((estado.ruta||[]).filter(p=>puntoDentroCarta(p.lat,p.lon)).map(p=>[p.lat,p.lon]));
+}
+function ovPushTrack(lat,lon){
+  if(!OV.track) return;
+  OV.track.addLatLng([lat,lon]);
+  const pts = OV.track.getLatLngs();
+  if(pts.length > OV_MAX_TRACK){ pts.shift(); OV.track.setLatLngs(pts); }
+}
+function ovClearTrack(){ if(OV.track) OV.track.setLatLngs([]); }
+function ovUpdate(force){
+  if(!OV.map || OV.collapsed) return;
+  OV.rect.setBounds(map.getBounds());
+  if(!shipMarker) return;
+  const ll = shipMarker.getLatLng();
+  OV.ship.setLatLng(ll);
+  const svg = OV.ship.getElement() && OV.ship.getElement().querySelector('.ship-hull');
+  if(svg) svg.style.transform = `rotate(${norm360(estado.heading*R2D)}deg)`;
+  if(OV.mode === 'follow'){
+    const z = Math.min(OV_MAX_ZOOM, map.getZoom() - OV_ZOOM_OFFSET);
+    const c = OV.map.getCenter();
+    if(force || OV.map.getZoom() !== z || Math.abs(c.lat-ll.lat) > 1e-6 || Math.abs(c.lng-ll.lng) > 1e-6) OV.map.setView(ll, z, {animate:false});
+  }
+}
+function setOverviewMode(mode){
+  OV.mode = mode;
+  const b = document.getElementById('ovMode');
+  b.textContent = mode === 'follow' ? 'Seguir' : 'Carta';
+  b.setAttribute('aria-label', mode === 'follow' ? 'Vista general siguiendo al buque. Pulsa para ver la carta completa' : 'Vista general de la carta completa. Pulsa para seguir al buque');
+  if(OV.map){ if(mode === 'full') OV.map.fitBounds(CHART_BOUNDS, {animate:false}); else ovUpdate(true); }
+}
+function setOverviewCollapsed(c, byUser){
+  OV.collapsed = !!c; if(byUser) OV.userSet = true;
+  const box = document.getElementById('overview'), t = document.getElementById('ovToggle');
+  box.hidden = OV.collapsed;
+  const label = OV.collapsed ? 'Mostrar vista general' : 'Ocultar vista general';
+  t.setAttribute('aria-pressed', String(!OV.collapsed));
+  t.setAttribute('aria-label', label); t.title = label;
+  if(!OV.collapsed){ initOverview(); if(OV.map){ OV.map.invalidateSize(); setOverviewMode(OV.mode); ovUpdate(true); } }
+}
+document.getElementById('ovToggle').addEventListener('click', ()=>setOverviewCollapsed(!OV.collapsed, true));
+document.getElementById('ovMode').addEventListener('click', ()=>setOverviewMode(OV.mode === 'follow' ? 'full' : 'follow'));
+setInterval(()=>ovUpdate(false), 100);
+
+// Zoom propio (misma barra que seguir y vista general): se desactiva en los límites de la carta.
+function syncZoomButtons(){
+  document.getElementById('btnZoomIn').disabled  = map.getZoom() >= map.getMaxZoom();
+  document.getElementById('btnZoomOut').disabled = map.getZoom() <= map.getMinZoom();
+}
+document.getElementById('btnZoomIn').addEventListener('click', ()=>map.zoomIn());
+document.getElementById('btnZoomOut').addEventListener('click', ()=>map.zoomOut());
+map.on('zoomend', syncZoomButtons);
+
+// Diagrama de fuerzas: un botón con icono (arriba a la izquierda) lo muestra u oculta.
+const FP = { on:false, userSet:false };
+function setForcePanel(on, byUser){
+  FP.on = !!on; if(byUser) FP.userSet = true;
+  const fd = document.getElementById('forceDiagram'), b = document.getElementById('btnForce');
+  fd.hidden = !FP.on;
+  b.setAttribute('aria-pressed', String(FP.on));
+  paintForceBtn();
+}
+function paintForceBtn(){
+  const b = document.getElementById('btnForce');
+  const label = b.disabled ? 'Diagrama de fuerzas: no cabe en esta pantalla' : (FP.on ? 'Ocultar diagrama de fuerzas' : 'Mostrar diagrama de fuerzas');
+  b.setAttribute('aria-label', label); b.title = label;
+}
+document.getElementById('btnForce').addEventListener('click', ()=>setForcePanel(!FP.on, true));
+
+// North arrow: se calcula con la proyección de la carta (dónde cae el norte en pantalla), no se supone.
+function updateNorthArrow(){
+  if(!map._loaded) return 0;
+  const c = map.getCenter();
+  const p1 = map.latLngToContainerPoint(c), p2 = map.latLngToContainerPoint([c.lat + 0.001, c.lng]);
+  const ang = Math.atan2(p2.x - p1.x, -(p2.y - p1.y)) * R2D;      // 0° = el norte apunta hacia arriba del canvas
+  const el = document.getElementById('northArrow'), svg = el.querySelector('svg');
+  svg.style.transform = `rotate(${ang.toFixed(2)}deg)`;
+  const txt = Math.abs(ang) < 0.5 ? 'Norte arriba' : `Norte a ${Math.round(norm360(ang))} grados`;
+  el.setAttribute('aria-label', txt); el.title = txt;
+  return ang;
+}
+map.on('move zoom resize', updateNorthArrow);
+
+// Las capas flotantes comparten contenedor con Leaflet: aislarlas del mapa principal.
+['overview','mapTools','btnForce','northArrow'].forEach(id=>{
+  const el = document.getElementById(id); if(!el) return;
+  L.DomEvent.disableClickPropagation(el);
+  L.DomEvent.disableScrollPropagation(el);
+  ['pointerdown','mousedown','touchstart','dblclick'].forEach(t=>el.addEventListener(t, e=>e.stopPropagation()));
+});
+
+/* Distribución de las esquinas inferiores frente a la consola ASD. Se mide en lugar de suponer anchos:
+   - izquierda: radar + cursor (mismo ancho, --stack-w). Si junto a la consola no caben, suben por encima de ella.
+   - derecha: barra de herramientas (zoom, seguir, vista general). Igual: si no cabe a un lado, sube sobre la consola.
+   El radar cede ancho (190 -> 150 px) solo si hace falta para que quepa el diagrama de fuerzas encima. */
+const CORNER_MARGIN = 12, STACK_MAX = 190, STACK_MIN = 150, CURSOR_H = 50, GAP = 8, FD_TOP = 56, FD_NEED = 200, TOOLS_W = 38;
+function layoutCorner(){
+  const mapEl = document.getElementById('map'), dock = document.getElementById('simDock');
+  const W = mapEl.clientWidth, H = mapEl.clientHeight, dw = dock.offsetWidth, dh = dock.offsetHeight;
+  if(!W || !dw) return;
+  const sideFree = (W - dw)/2 - CORNER_MARGIN;                       // hueco a cada lado de la consola
+  const raised  = sideFree < STACK_MAX + CORNER_MARGIN;
+  const raisedR = sideFree < TOOLS_W + CORNER_MARGIN;
+  mapEl.style.setProperty('--lift',   raised  ? (dh + CORNER_MARGIN) + 'px' : '0px');
+  mapEl.style.setProperty('--lift-r', raisedR ? (dh + CORNER_MARGIN) + 'px' : '0px');
+  mapEl.dataset.stack = raised ? 'raised' : 'side';
+
+  const below = (raised ? dh + 2*CORNER_MARGIN : CORNER_MARGIN) + CURSOR_H + GAP;   // del borde inferior a la base del radar
+  const room = H - below - FD_TOP - GAP - FD_NEED;
+  const d = Math.round(Math.max(STACK_MIN, Math.min(STACK_MAX, room)));
+  mapEl.style.setProperty('--stack-w', d + 'px');
+
+  // El diagrama de fuerzas llega hasta el borde superior del radar; si no cabe entero, su cuerpo se desplaza.
+  const fdMax = Math.max(0, H - below - d - GAP - FD_TOP - GAP);
+  mapEl.style.setProperty('--fd-max', fdMax + 'px');
+  const fd = document.getElementById('forceDiagram'), btnF = document.getElementById('btnForce');
+  fd.classList.toggle('compact', fdMax < 370); fd.classList.toggle('tiny', fdMax < 150);
+  btnF.disabled = fdMax < 150 || W <= 600;   // a 600 px o menos taparía la brújula
+  paintForceBtn();
+  if(!FP.userSet) setForcePanel(W >= 900 && !btnF.disabled, false);
+  if(!OV.userSet) setOverviewCollapsed(W < 760, false);
+}
+if(window.ResizeObserver){
+  const ro = new ResizeObserver(layoutCorner);
+  ro.observe(document.getElementById('map')); ro.observe(document.getElementById('simDock'));
+}
+// Además del observador: ventana, fin de la transición de los paneles, carga de fuentes y dos reintentos,
+// para que la distribución nunca quede calculada con medidas intermedias.
+window.addEventListener('resize', layoutCorner);
+document.getElementById('app').addEventListener('transitionend', e=>{ if(e.propertyName === 'grid-template-columns') layoutCorner(); });
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(layoutCorner);
+[250, 800].forEach(ms=>setTimeout(layoutCorner, ms));
+layoutCorner();
+// En pantallas estrechas/cuadradas (761-1099 px) el panel de configuración arranca oculto: con los dos paneles abiertos
+// la carta quedaría en ~250-500 px y no cabrían la consola ni las capas. Se reabre con el botón de la cabecera.
+if(window.innerWidth > 760 && window.innerWidth < 1100){
+  const appEl = document.getElementById('app');
+  appEl.style.transition = 'none';                 // sin animación en la carga: la distribución nace ya definitiva
+  togglePanel('panelBuque');
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{ appEl.style.transition = ''; }));
+}
 // En pantallas bajas el panel izquierdo arranca con Ambiente plegado, para no desplazarse
 if(window.innerHeight < 800) document.getElementById('grpAmbiente').open = false;
-// El diagrama de fuerzas arranca abierto solo si la carta tiene sitio
-if(document.getElementById('map').clientWidth < 900) document.getElementById('forceDiagram').open = false;
 
 // Inicializar vista con el buque ya ubicado (pero simulación en pausa)
 ubicarBuque();
+layoutCorner();   // ahora el mapa tiene vista: la vista general puede crearse
+updateNorthArrow();
+syncZoomButtons();
 document.getElementById('azReadoutP').textContent = String(Math.round(estado.azP)).padStart(3,'0')+'°';
 document.getElementById('azReadoutS').textContent = String(Math.round(estado.azS)).padStart(3,'0')+'°';
 actualizarCorrienteAuto();

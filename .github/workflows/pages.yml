@@ -41,7 +41,7 @@ jobs:
           cp js/config.js js/orders.js js/voice-tools.js js/audio.js js/sim-api.js js/voice.js _site/js/
           cp -r vendor _site/vendor
           cp -r assets/fonts _site/assets/fonts
-          cp map/z17-single.webp _site/map/
+          cp map/z17-single.webp map/z17-overview.webp _site/map/
           cp controles/control.webp _site/controles/
           touch _site/.nojekyll
 

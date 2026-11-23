@@ -154,8 +154,9 @@
       return ok('Buque ubicado');
     },
 
-    ui({ panel, visible, chart, rose }){
+    ui({ panel, visible, chart, rose, follow }){
       const done = [];
+      if(typeof follow === 'boolean'){ setFollow(follow); done.push(follow ? 'Carta centrada en el buque' : 'Seguimiento desactivado'); }
       if(panel){
         const id = panel === 'left' ? 'panelBuque' : 'panelTelemetria';
         const hidden = byId(id).classList.contains('collapsed');
@@ -165,7 +166,7 @@
       }
       if(chart){ setChartTab(chart); done.push(chart === 'abat' ? 'Gráfica de abatimiento' : 'Perfil batimétrico'); }
       if(rose){ toggleRosa(rose === 'open'); done.push(rose === 'open' ? 'Rosa abierta' : 'Rosa cerrada'); }
-      return done.length ? ok(done.join(', ')) : fail('bad_args', 'Indica panel, gráfica o rosa.');
+      return done.length ? ok(done.join(', ')) : fail('bad_args', 'Indica panel, gráfica, rosa o seguimiento.');
     },
 
     getStatus(){
