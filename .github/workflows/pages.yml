@@ -25,7 +25,7 @@ jobs:
           node-version: 22
 
       - name: Pruebas de las herramientas de voz
-        run: node --test tests/
+        run: node --test "tests/*.test.js"
 
       - name: Verificar que no hay claves en el repositorio
         run: |
