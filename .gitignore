@@ -6,3 +6,6 @@ js/config.local.js
 .env.*
 .dev.vars
 node_modules/
+
+# Configuración local de Claude Code
+.claude/
